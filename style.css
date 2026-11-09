@@ -339,5 +339,6 @@ a,button{-webkit-tap-highlight-color:transparent}
 .panel>.strip{grid-column:1/-1}
 .strip img[src*="date"]{object-position:85% 50%}
 #coffee-list{display:contents}
-.strip.s3{grid-template-columns:repeat(3,1fr)}
-@media(max-width:860px){.strip.s3 figure{flex:0 0 58%}}
+.strip.s3{grid-template-columns:1fr 1fr 1.875fr}
+.strip img[src*="coffee-cake"]{aspect-ratio:3/2}
+@media(max-width:860px){.strip.s3 figure{flex:0 0 58%}.strip.s3 figure:last-child{flex:0 0 88%}}
