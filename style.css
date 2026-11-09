@@ -342,3 +342,11 @@ a,button{-webkit-tap-highlight-color:transparent}
 .strip.s3{grid-template-columns:1fr 1fr 1.875fr}
 .strip img[src*="coffee-cake"]{aspect-ratio:3/2}
 @media(max-width:860px){.strip.s3 figure{flex:0 0 58%}.strip.s3 figure:last-child{flex:0 0 88%}}
+
+/* matcha photo pair */
+.pduo{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.pduo .pphoto:nth-child(2){margin-top:34px}
+#matcha .pduo .pphoto img{object-position:50% 50%}
+#matcha .pduo .pphoto:first-child img{object-position:50% 70%}
+@media(max-width:860px){.pduo{max-width:360px;margin:0 auto;width:100%}.pduo .pphoto{max-width:none;margin:0}}
+@media(max-width:560px){.panel.has-photo .pduo .pphoto{max-width:none}}
