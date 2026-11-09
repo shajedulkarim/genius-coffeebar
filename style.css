@@ -324,3 +324,17 @@ a,button{-webkit-tap-highlight-color:transparent}
 .brand-word{height:15px;width:auto;aspect-ratio:861/205}
 .arch svg{height:auto;aspect-ratio:430/438}
 .hero-mark svg{aspect-ratio:430/438}
+
+/* COLD & FRESH photo strip */
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:44px}
+.strip figure{margin:0}
+.strip img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;border-radius:var(--r);box-shadow:0 26px 44px -30px rgba(18,48,31,.55)}
+.strip figcaption{margin-top:10px;font-family:var(--serif);font-weight:600;font-size:15px;color:var(--green-d);line-height:1.25}
+@media(max-width:860px){
+  .strip{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;margin:0 0 32px;padding:0 0 4px;scrollbar-width:none}
+  .strip::-webkit-scrollbar{display:none}
+  .strip figure{flex:0 0 58%;scroll-snap-align:start}
+}
+#cold-list{display:contents}
+.panel>.strip{grid-column:1/-1}
+.strip img[src*="date"]{object-position:85% 50%}
