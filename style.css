@@ -431,7 +431,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offs
 .pbtn:active{transform:scale(.93)}
 .pbtn[data-q]{background:var(--green);border-color:var(--green);box-shadow:0 8px 16px -10px rgba(18,48,31,.7)}
 .pbtn[data-q] b,.pbtn[data-q] b::after{color:var(--cream-2)}
-.pbtn[data-q]::before{content:attr(data-q);position:absolute;top:-8px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--green-dd);color:#fff;font:600 11px/18px var(--sans);text-align:center;box-shadow:0 0 0 2px var(--cream)}
+.pbtn[data-q]::before-disabled{content:attr(data-q);position:absolute;top:-8px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--green-dd);color:#fff;font:600 11px/18px var(--sans);text-align:center;box-shadow:0 0 0 2px var(--cream)}
 .group .p2 .cell{display:flex;justify-content:flex-end;width:76px}
 .group .p2 .cell .na{width:auto}
 .group .p1{display:flex}
@@ -486,3 +486,23 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offs
   .sheet-head{padding:18px 20px 12px}.sheet-body{padding:6px 20px 14px}.sheet-foot{padding:14px 20px calc(16px + env(safe-area-inset-bottom))}
 }
 @media(max-width:380px){.group .p2 .cell,.cols span,.group .p2 b.na{width:66px}.pbtn{padding:8px 7px}}
+
+/* compact pills + in-place stepper */
+.pbtn{padding:4px 10px;min-width:54px}
+.pbtn b{font-size:15px!important}
+.group .p2 .pbtn b::after{display:none}
+.pbtn[data-q]{display:inline-flex;align-items:center;gap:0;padding:2px;min-width:0}
+.pbtn .qv{min-width:16px;text-align:center;font:600 14px var(--sans);color:var(--cream-2)}
+.pbtn .st{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;font-size:18px;line-height:1;color:var(--cream-2);transition:background .15s}
+.pbtn .st:hover{background:rgba(255,255,255,.2)}
+.pbtn[data-q]:hover{background:var(--green)}
+@media(max-width:860px){
+  .group .p2 .cell,.cols span,.group .p2 b.na{width:74px}
+  .pbtn{padding:7px 9px;min-width:50px}
+  .pbtn[data-q]{padding:2px}
+  .pbtn .st{width:30px;height:30px}
+}
+@media(max-width:380px){.group .p2 .cell,.cols span,.group .p2 b.na{width:68px}.pbtn .st{width:26px;height:26px}.pbtn .qv{min-width:14px}}
+.group .p2,.cols{gap:6px}
+@media(max-width:860px){.group .p2 .cell,.cols span,.group .p2 b.na{width:76px}.pbtn .st{width:28px;height:28px}}
+@media(max-width:380px){.group .p2 .cell,.cols span,.group .p2 b.na{width:68px}.pbtn .st{width:24px;height:24px}.pbtn .qv{min-width:12px}}
