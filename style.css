@@ -318,3 +318,9 @@ a,button{-webkit-tap-highlight-color:transparent}
   .pair figure::after{inset:0 0 auto 0;height:45%;background:linear-gradient(rgba(0,0,0,.55),transparent)}
   .pair figcaption{top:14px;bottom:auto;font-size:17px}
 }
+
+/* REAL LOGO (mask-based, recolours with currentColor) */
+.brand-mark{width:34px;height:auto;aspect-ratio:430/438}
+.brand-word{height:15px;width:auto;aspect-ratio:861/205}
+.arch svg{height:auto;aspect-ratio:430/438}
+.hero-mark svg{aspect-ratio:430/438}

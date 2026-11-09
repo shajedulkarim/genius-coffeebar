@@ -16,21 +16,20 @@
 
 <!-- reusable logo mark -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="mark" viewBox="0 0 100 100">
-    <g fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M32 40V30a18 18 0 0136 0v10"/>
-      <path d="M32 34a8 8 0 00-8 8v6a8 8 0 008 8"/>
-      <path d="M68 34a8 8 0 018 8v6a8 8 0 01-8 8"/>
-      <path d="M32 30v24a18 18 0 0036 0V30"/>
-      <path d="M42 38h8v14h8"/>
-    </g>
+  <symbol id="mark" viewBox="0 0 430 438">
+    <mask id="mk" style="mask-type:alpha"><image href="img/mark.png" width="430" height="438"/></mask>
+    <rect width="430" height="438" fill="currentColor" mask="url(#mk)"/>
+  </symbol>
+  <symbol id="word" viewBox="0 0 861 205">
+    <mask id="wk" style="mask-type:alpha"><image href="img/wordmark.png" width="861" height="205"/></mask>
+    <rect width="861" height="205" fill="currentColor" mask="url(#wk)"/>
   </symbol>
 </svg>
 
 <header class="nav" id="nav">
   <a href="#top" class="brand" aria-label="Genius Coffee Bar">
     <svg class="brand-mark"><use href="#mark"/></svg>
-    <span>GENIUS</span>
+    <svg class="brand-word"><use href="#word"/></svg>
   </a>
   <nav class="links" id="links">
     <a href="#story">Story</a>
@@ -194,7 +193,7 @@
 <footer class="footer">
   <div class="wrap foot">
     <div class="brand light">
-      <svg class="brand-mark"><use href="#mark"/></svg><span>GENIUS</span>
+      <svg class="brand-mark"><use href="#mark"/></svg><svg class="brand-word"><use href="#word"/></svg>
     </div>
     <p>Your Daily Dose of Brilliance!</p>
     <a href="https://www.instagram.com/genius.coffeebar" target="_blank" rel="noopener">Instagram</a>
