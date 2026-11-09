@@ -36,13 +36,19 @@ const MENU = {
   ]
 };
 
-const price = v => v == null ? '—' : v;
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+// A tappable price: adds this item (and hot/iced variant) to the order list.
+const btn = (name, variant, p) =>
+  `<button type="button" class="pbtn" data-n="${esc(name)}" data-v="${variant}" data-p="${p}" aria-label="Add ${esc(name)}${variant ? ' (' + variant.toLowerCase() + ')' : ''} to order, ${p} OMR"><b>${p}</b></button>`;
 
 function groupHTML(g) {
   const head = g.dual ? '<div class="cols"><span>Hot</span><span>Iced</span></div>' : '';
   const rows = g.items.map(it => g.dual
-    ? `<li><span class="n">${it[0]}</span><span class="dots"></span><span class="p2"><b${it[1]==null?' class="na"':''}>${price(it[1])}</b><b${it[2]==null?' class="na"':''}>${price(it[2])}</b></span></li>`
-    : `<li><span class="n">${it[0]}</span><span class="dots"></span><span class="p1"><b>${it[1]}</b></span></li>`
+    ? `<li><span class="n">${it[0]}</span><span class="dots"></span><span class="p2">${[it[1], it[2]].map((p, i) =>
+        p == null ? '<span class="cell"><b class="na">—</b></span>'
+                  : `<span class="cell">${btn(it[0], i ? 'Iced' : 'Hot', p)}</span>`).join('')}</span></li>`
+    : `<li><span class="n">${it[0]}</span><span class="dots"></span><span class="p1">${btn(it[0], '', it[1])}</span></li>`
   ).join('');
   return `<div class="group"><div class="ghead"><h3>${g.title}</h3>${head}</div><ul>${rows}</ul></div>`;
 }
