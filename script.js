@@ -19,6 +19,7 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   document.querySelectorAll('.tab,.panel').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   document.getElementById(t.dataset.tab).classList.add('active');
+  t.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});
 }));
 
 // reveal on scroll
