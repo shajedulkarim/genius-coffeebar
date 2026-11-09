@@ -78,16 +78,28 @@ document.getElementById('yr').textContent = new Date().getFullYear();
     // price pills: show quantity badge
     document.querySelectorAll('.pbtn').forEach(b => {
       const it = cart.find(i => i.k === keyOf(b.dataset.n, b.dataset.v));
-      const q = it ? it.q : 0;
-      if (b._q === q) return;
-      if (b._html === undefined) { b._html = b.innerHTML; b._label = b.getAttribute('aria-label'); }
-      b._q = q;
-      if (q) {
-        b.setAttribute('data-q', q);
-        b.innerHTML = '<span class="st" data-act="-" aria-hidden="true">−</span><span class="qv">' + q + '</span><span class="st" data-act="+" aria-hidden="true">+</span>';
-        b.setAttribute('aria-label', q + ' in order. Tap to add one more');
+      if (it) b.setAttribute('data-q', it.q); else b.removeAttribute('data-q');
+    });
+    // inline stepper lines under each menu row
+    document.querySelectorAll('.group li').forEach(li => {
+      const active = [...li.querySelectorAll('.pbtn')]
+        .map(p => ({ p, it: cart.find(i => i.k === keyOf(p.dataset.n, p.dataset.v)) })).filter(x => x.it);
+      let box = li.querySelector('.lines');
+      if (!active.length) { if (box) box.remove(); return; }
+      const sig = active.map(x => x.it.k).join(',');
+      if (!box) { box = document.createElement('div'); box.className = 'lines'; li.appendChild(box); }
+      if (box._sig !== sig) {
+        box._sig = sig;
+        box.innerHTML = active.map(({ p, it }) =>
+          '<div class="ln" data-k="' + esc(it.k) + '"><span class="ln-l">' + (it.v ? esc(it.v) : 'In your order') + '</span>' +
+          '<div class="stp"><button type="button" data-act="-" data-n="' + esc(it.n) + '" data-v="' + esc(it.v) + '" aria-label="Remove one ' + esc(label(it)) + '">−</button><b>' + it.q + '</b>' +
+          '<button type="button" data-act="+" data-n="' + esc(it.n) + '" data-v="' + esc(it.v) + '" data-p="' + p.dataset.p + '" aria-label="Add one ' + esc(label(it)) + '">+</button></div>' +
+          '<span class="ln-sum">' + fmt(it.p * it.q) + '</span></div>').join('');
       } else {
-        b.removeAttribute('data-q'); b.innerHTML = b._html; b.setAttribute('aria-label', b._label);
+        box.querySelectorAll('.ln').forEach(ln => {
+          const it = cart.find(i => i.k === ln.dataset.k); if (!it) return;
+          ln.querySelector('.stp b').textContent = it.q; ln.querySelector('.ln-sum').textContent = fmt(it.p * it.q);
+        });
       }
     });
     // floating bar
@@ -129,12 +141,11 @@ document.getElementById('yr').textContent = new Date().getFullYear();
 
   document.addEventListener('click', e => {
     const p = e.target.closest('.pbtn');
-    if (p) {
-      const act = e.target.closest('[data-act]');
-      if (act && act.dataset.act === '-') {
-        const idx = cart.findIndex(i => i.k === keyOf(p.dataset.n, p.dataset.v));
-        if (idx > -1) { cart[idx].q--; if (cart[idx].q <= 0) cart.splice(idx, 1); render(); }
-      } else add(p.dataset.n, p.dataset.v, p.dataset.p);
+    if (p) { add(p.dataset.n, p.dataset.v, p.dataset.p); return; }
+    const st = e.target.closest('.stp button');
+    if (st) {
+      const idx = cart.findIndex(i => i.k === keyOf(st.dataset.n, st.dataset.v));
+      if (idx > -1) { cart[idx].q += st.dataset.act === '+' ? 1 : -1; if (cart[idx].q <= 0) cart.splice(idx, 1); render(); }
       return;
     }
     if (e.target.closest('[data-open-cart]')) { open(); return; }

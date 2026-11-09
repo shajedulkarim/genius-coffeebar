@@ -40,7 +40,7 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replac
 
 // A tappable price: adds this item (and hot/iced variant) to the order list.
 const btn = (name, variant, p) =>
-  `<button type="button" class="pbtn" data-n="${esc(name)}" data-v="${variant}" data-p="${p}" aria-label="Add ${esc(name)}${variant ? ' (' + variant.toLowerCase() + ')' : ''} to order, ${p} OMR"><b>${p}</b></button>`;
+  `<button type="button" class="pbtn" data-n="${esc(name)}" data-v="${variant}" data-p="${p}" aria-label="Add ${esc(name)}${variant ? ' (' + variant.toLowerCase() + ')' : ''} to order, ${p} OMR"><b>${p}</b><i class="pl" aria-hidden="true">+</i></button>`;
 
 function groupHTML(g) {
   const head = g.dual ? '<div class="cols"><span>Hot</span><span>Iced</span></div>' : '';
