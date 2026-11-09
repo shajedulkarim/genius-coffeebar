@@ -519,3 +519,13 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offs
 }
 @media(max-width:380px){.group .p2 .cell,.cols span,.group .p2 b.na{width:70px}.pbtn{padding-left:8px}}
 .stp b::after,.ln b::after{display:none!important}
+
+/* OMR back on every pill */
+.group .p2 .pbtn b::after{display:inline!important;font-size:9px;margin-left:3px}
+.group .p2 .cell,.cols span,.group .p2 b.na{width:100px}
+.pbtn{gap:6px;padding:6px 6px 6px 11px}
+@media(max-width:860px){
+  .group .p2 .cell,.cols span,.group .p2 b.na{width:98px}
+  .pbtn{padding:6px 6px 6px 10px;gap:5px}
+}
+@media(max-width:380px){.group .p2 .cell,.cols span,.group .p2 b.na{width:90px}.pbtn{padding-left:8px}.group .p2 .pbtn b::after{margin-left:2px}}
