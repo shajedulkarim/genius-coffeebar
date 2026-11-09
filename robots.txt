@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://shajedulkarim.github.io/genius-coffeebar/sitemap.xml

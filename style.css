@@ -350,3 +350,73 @@ a,button{-webkit-tap-highlight-color:transparent}
 #matcha .pduo .pphoto:first-child img{object-position:50% 70%}
 @media(max-width:860px){.pduo{max-width:360px;margin:0 auto;width:100%}.pduo .pphoto{max-width:none;margin:0}}
 @media(max-width:560px){.panel.has-photo .pduo .pphoto{max-width:none}}
+
+/* ===== v3: rating, order, instagram, map, polish ===== */
+.rating{display:inline-flex;align-items:center;gap:8px;margin-top:26px;padding:9px 18px;border-radius:99px;border:1px solid rgba(243,235,221,.25);background:rgba(243,235,221,.06);color:var(--cream-2);font-size:14px;transition:background .3s,border-color .3s,transform .3s}
+.rating .stars{color:#E9C46A;letter-spacing:2px;font-size:13px}
+.rating b{font-weight:600}
+.rating span:last-child{opacity:.8}
+.rating:hover{background:rgba(243,235,221,.14);border-color:rgba(243,235,221,.5);transform:translateY(-2px)}
+
+.order{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1000px;margin:56px auto 28px;padding:28px 34px;border-radius:var(--r);background:var(--green-d);color:var(--cream-2);box-shadow:0 30px 50px -34px rgba(18,48,31,.6)}
+.order h3{font-size:26px;color:var(--cream-2);margin-bottom:4px}
+.order p{opacity:.8;font-size:15px}
+.btn-wa{display:inline-flex;align-items:center;gap:10px;background:#25D366;border-color:#25D366;color:#073B1C;white-space:nowrap;font-weight:600}
+.btn-wa:hover{background:#2fe574;border-color:#2fe574}
+.btn-wa svg{width:20px;height:20px;fill:currentColor}
+
+.ig .center .btn{margin-top:44px}
+.ig-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:44px}
+.ig-tile{position:relative;aspect-ratio:1;overflow:hidden;border-radius:var(--r);display:block;background:var(--cream-3)}
+.ig-tile img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .8s cubic-bezier(.2,.7,.2,1)}
+.ig-tile span{position:absolute;inset:auto 0 0 0;padding:28px 10px 12px;text-align:center;color:#fff;font-size:12px;letter-spacing:.12em;text-transform:uppercase;background:linear-gradient(transparent,rgba(18,48,31,.8));opacity:0;transform:translateY(8px);transition:.35s}
+.ig-tile:hover img{transform:scale(1.08)}
+.ig-tile:hover span,.ig-tile:focus-visible span{opacity:1;transform:none}
+
+.map{margin-top:28px;border-radius:var(--r);overflow:hidden;box-shadow:0 30px 50px -34px rgba(18,48,31,.5);border:1px solid rgba(45,110,80,.15);line-height:0}
+.map iframe{width:100%;height:340px;border:0;filter:saturate(.85) contrast(.98)}
+
+@media(max-width:860px){
+  .ig-grid{grid-template-columns:repeat(3,1fr);gap:8px}
+  .ig-tile span{display:none}
+  .order{flex-direction:column;align-items:stretch;text-align:center;padding:26px 22px;margin:40px 0 24px}
+  .order .btn{justify-content:center;padding:16px 24px}
+  .map iframe{height:280px}
+  .rating{margin-top:22px;font-size:13px}
+}
+
+/* smoother tabs + panels */
+.tab{transition:background .3s,color .3s,border-color .3s,transform .25s,box-shadow .3s}
+.tab:hover{transform:translateY(-1px)}
+.tab:active{transform:scale(.97)}
+.tab.active{box-shadow:0 10px 22px -12px rgba(18,48,31,.6)}
+.panel.active{animation:fade .55s cubic-bezier(.2,.7,.2,1)}
+.panel.active .group{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
+.panel.active .group:nth-child(2){animation-delay:.06s}
+.panel.active .group:nth-child(3){animation-delay:.12s}
+.panel.active .group:nth-child(n+4){animation-delay:.18s}
+.panel.active .strip figure,.panel.active .pphoto{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+.panel.active .strip figure:nth-child(2){animation-delay:.07s}
+.panel.active .strip figure:nth-child(3){animation-delay:.14s}
+.panel.active .strip figure:nth-child(4){animation-delay:.21s}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}}
+
+/* hover polish (pointer devices only) */
+@media(hover:hover){
+  .group li{transition:background .25s,padding .25s,border-radius .25s}
+  .group li:hover{background:rgba(45,110,80,.07);padding-left:10px;padding-right:10px;border-radius:10px}
+  .group li:hover .n{color:var(--green-d)}
+  .pphoto img,.pair img{transition:transform .9s cubic-bezier(.2,.7,.2,1)}
+  .strip figure{transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+  .strip figure:hover{transform:translateY(-6px)}
+  .pphoto:hover img,.pair figure:hover img{transform:scale(1.06)}
+  .card:hover{transform:translateY(-6px);box-shadow:0 30px 50px -30px rgba(18,48,31,.35)}
+  .combos div{transition:transform .3s,background .3s}
+  .combos div:hover{transform:translateX(6px);background:rgba(232,220,201,.08)}
+  .links a:hover{opacity:1}
+}
+a:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offset:3px;border-radius:6px}
+.btn:active{transform:scale(.98)}
+.dock a{transition:background .2s,transform .15s}
+.dock a:active{transform:scale(.94)}
+.ig-tile img[src*="strawberry"]{object-position:50% 30%}
