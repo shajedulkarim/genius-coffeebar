@@ -529,3 +529,15 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offs
   .pbtn{padding:6px 6px 6px 10px;gap:5px}
 }
 @media(max-width:380px){.group .p2 .cell,.cols span,.group .p2 b.na{width:90px}.pbtn{padding-left:8px}.group .p2 .pbtn b::after{margin-left:2px}}
+
+/* ===== admin-driven bits: announcement bar, sold out ===== */
+.announce{position:fixed;inset:0 0 auto 0;z-index:70;min-height:36px;display:flex;align-items:center;justify-content:center;text-align:center;padding:6px 16px;background:var(--green-dd);color:var(--cream-2);font:500 13px/1.35 var(--sans);letter-spacing:.04em}
+.announce[hidden]{display:none}
+body.has-announce .nav{top:36px}
+body.has-announce .hero{padding-top:36px}
+.is-sold .n{opacity:.55}
+.so{margin-left:8px;padding:2px 8px;border-radius:99px;background:rgba(45,110,80,.14);color:var(--green-d);font:600 10px/1.4 var(--sans);letter-spacing:.1em;text-transform:uppercase;vertical-align:middle;white-space:nowrap}
+.pbtn.sold{pointer-events:none;cursor:default;opacity:.45;min-height:44px;display:inline-flex;align-items:center;padding:6px 11px;border:1px dashed rgba(45,110,80,.4);border-radius:99px}
+.pbtn.sold b{text-decoration:line-through}
+.group .p2 .pbtn.sold b::after{display:inline!important;font-size:9px;margin-left:3px}
+.group .p2 .cell .pbtn.sold{width:100%;justify-content:center}

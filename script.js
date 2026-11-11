@@ -31,16 +31,20 @@ document.querySelectorAll('.reveal').forEach((el, i) => {
   io.observe(el);
 });
 
-// open / closed (Muscat time, UTC+4)
-(function () {
+// open / closed (Muscat time, UTC+4) — hours come from the admin portal when connected
+function updateOpen() {
   const el = document.getElementById('openNow');
+  const cfg = Object.assign({ open: 7, close_sun_wed: 23, close_thu_sat: 24, temp_closed: false }, (window.GeniusSettings || {}).hours);
   const m = new Date(Date.now() + new Date().getTimezoneOffset() * 6e4 + 4 * 36e5);
   const d = m.getDay(), h = m.getHours() + m.getMinutes() / 60;
-  const closeAt = (d >= 4 && d <= 6) ? 24 : 23; // Thu-Sat 12am, Sun-Wed 11pm
-  const open = h >= 7 && h < closeAt;
-  el.textContent = open ? '● Open now' : '○ Closed right now — opens 7 am';
+  const closeAt = (d >= 4 && d <= 6) ? cfg.close_thu_sat : cfg.close_sun_wed; // Thu-Sat late, Sun-Wed early
+  const open = !cfg.temp_closed && h >= cfg.open && h < closeAt;
+  const fh = x => { x = ((x % 24) + 24) % 24; return (x % 12 || 12) + (x < 12 ? ' am' : ' pm'); };
+  el.textContent = cfg.temp_closed ? '○ Temporarily closed' : open ? '● Open now' : '○ Closed right now — opens ' + fh(cfg.open);
   el.classList.toggle('open', open);
-})();
+}
+updateOpen();
+document.addEventListener('settings:applied', updateOpen);
 
 document.getElementById('yr').textContent = new Date().getFullYear();
 
@@ -156,6 +160,14 @@ document.getElementById('yr').textContent = new Date().getFullYear();
       render();
     }
   });
+  $('sendWA').addEventListener('click', () => {
+    if (!cart.length || !window.GeniusCMS) return;
+    window.GeniusCMS.logOrder({
+      name: $('oName').value.trim(), pickup: $('oWhen').value, note: $('oNote').value.trim(), total: total() / 1000,
+      items: cart.map(i => ({ n: i.n, v: i.v, q: i.q, p: i.p / 1000 }))
+    });
+  });
+  document.addEventListener('menu:rendered', () => render());
   $('sheetClose').addEventListener('click', close);
   back.addEventListener('click', close);
   $('clearCart').addEventListener('click', () => { cart = []; render(); });

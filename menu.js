@@ -1,5 +1,6 @@
 // Menu data — prices in OMR, copied from the cafe's Instagram menu story.
-// Row: [name, price]  or  [name, hotPrice, icedPrice]  (use null where not offered)
+// Row: [name, price]  or  [name, hotPrice, icedPrice]  (use null where not offered).
+// This is the built-in fallback; when the admin portal is connected, the live menu replaces it.
 const MENU = {
   coffee: [
     { title: 'Espresso Bar', dual: true, items: [
@@ -41,19 +42,30 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replac
 // A tappable price: adds this item (and hot/iced variant) to the order list.
 const btn = (name, variant, p) =>
   `<button type="button" class="pbtn" data-n="${esc(name)}" data-v="${variant}" data-p="${p}" aria-label="Add ${esc(name)}${variant ? ' (' + variant.toLowerCase() + ')' : ''} to order, ${p} OMR"><b>${p}</b><i class="pl" aria-hidden="true">+</i></button>`;
+// Sold-out price: visible but not tappable.
+const soldBtn = p => `<span class="pbtn sold" aria-hidden="true"><b>${p}</b></span>`;
 
+// Row: [name, price] | [name, hot, iced] | optional 4th entry = sold out
 function groupHTML(g) {
   const head = g.dual ? '<div class="cols"><span>Hot</span><span>Iced</span></div>' : '';
-  const rows = g.items.map(it => g.dual
-    ? `<li><span class="n">${it[0]}</span><span class="dots"></span><span class="p2">${[it[1], it[2]].map((p, i) =>
-        p == null ? '<span class="cell"><b class="na">—</b></span>'
-                  : `<span class="cell">${btn(it[0], i ? 'Iced' : 'Hot', p)}</span>`).join('')}</span></li>`
-    : `<li><span class="n">${it[0]}</span><span class="dots"></span><span class="p1">${btn(it[0], '', it[1])}</span></li>`
-  ).join('');
-  return `<div class="group"><div class="ghead"><h3>${g.title}</h3>${head}</div><ul>${rows}</ul></div>`;
+  const rows = g.items.map(it => {
+    const sold = !!it[3], name = esc(it[0]);
+    const tag = sold ? '<em class="so">Sold out</em>' : '';
+    const cls = sold ? ' class="is-sold"' : '';
+    const pr = (p, v) => sold ? soldBtn(p) : btn(it[0], v, p);
+    return g.dual
+      ? `<li${cls}><span class="n">${name}${tag}</span><span class="dots"></span><span class="p2">${[it[1], it[2]].map((p, i) =>
+          p == null ? '<span class="cell"><b class="na">—</b></span>' : `<span class="cell">${pr(p, i ? 'Iced' : 'Hot')}</span>`).join('')}</span></li>`
+      : `<li${cls}><span class="n">${name}${tag}</span><span class="dots"></span><span class="p1">${pr(it[1], '')}</span></li>`;
+  }).join('');
+  return `<div class="group"><div class="ghead"><h3>${esc(g.title)}</h3>${head}</div><ul>${rows}</ul></div>`;
 }
 
-Object.entries(MENU).forEach(([k, groups]) => {
-  const el = document.getElementById(k + '-list') || document.getElementById(k);
-  if (el) el.innerHTML = groups.map(groupHTML).join('');
-});
+function renderMenu(M) {
+  Object.entries(M).forEach(([k, groups]) => {
+    const el = document.getElementById(k + '-list') || document.getElementById(k);
+    if (el) el.innerHTML = groups.map(groupHTML).join('');
+  });
+  document.dispatchEvent(new Event('menu:rendered'));
+}
+renderMenu(MENU);

@@ -1,3 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /genius-coffeebar/admin/
+Disallow: /admin/
 Sitemap: https://shajedulkarim.github.io/genius-coffeebar/sitemap.xml
