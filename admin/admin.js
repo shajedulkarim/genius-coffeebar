@@ -19,6 +19,12 @@
     settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.5-2.3.9a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.5a7 7 0 00-2 1.2l-2.3-.9-2 3.5 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.5 2.3-.9a7 7 0 002 1.2l.4 2.5h4l.4-2.5a7 7 0 002-1.2l2.3.9 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>',
     insights: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>',
+    x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    rotl: '<svg viewBox="0 0 24 24"><path d="M3 8V3m0 5h5M3.5 8A9 9 0 112.9 14"/></svg>',
+    rotr: '<svg viewBox="0 0 24 24"><path d="M21 8V3m0 5h-5M20.5 8A9 9 0 1021.1 14"/></svg>',
+    dl: '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>',
+    ul: '<svg viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4l4 4M5 20h14"/></svg>',
+    undo: '<svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3"/></svg>',
     up: '<svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
     down: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
     trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'
@@ -28,7 +34,8 @@
   const hr = x => { x = ((x % 24) + 24) % 24; return (x % 12 || 12) + (x < 12 ? ' am' : ' pm'); };
   const omr = n => { const v = Number(n); return (Number.isInteger(v * 10) ? v.toFixed(1) : String(parseFloat(v.toFixed(3)))) + ' OMR'; };
   let toastT;
-  const toast = (msg, bad) => { $toast.textContent = msg; $toast.classList.toggle('bad', !!bad); $toast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => $toast.classList.remove('show'), bad ? 4000 : 1600); };
+  const undoToast = (msg, fn) => { S.undoFn = fn; $toast.innerHTML = esc(msg) + '<button class="tundo" data-undo>Undo</button>'; $toast.classList.remove('bad'); $toast.classList.add('show', 'act'); clearTimeout(toastT); toastT = setTimeout(() => { $toast.classList.remove('show', 'act'); S.undoFn = null; }, 7000); };
+  const toast = (msg, bad) => { $toast.classList.remove('act'); $toast.textContent = msg; $toast.classList.toggle('bad', !!bad); $toast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => $toast.classList.remove('show'), bad ? 4000 : 1600); };
   const show = () => { $boot.hidden = true; $app.hidden = false; };
 
   // ---------- not configured ----------
@@ -41,7 +48,7 @@
   }
 
   const db = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-  const S = { user: null, tab: 'orders', menuTab: 'coffee', groups: [], items: [], settings: {}, orders: [], ordersFilter: 'active', osearch: '', msearch: '', range: 7, busy: {}, role: 'owner', perms: [], cred: null, team: [], maxSeen: 0, polling: null, recovery: false };
+  const S = { user: null, tab: 'orders', menuTab: 'coffee', groups: [], items: [], settings: {}, orders: [], ordersFilter: 'active', osearch: '', msearch: '', range: 7, busy: {}, mfilter: '', collapsed: {}, view: null, undoFn: null, role: 'owner', perms: [], cred: null, team: [], maxSeen: 0, polling: null, recovery: false };
 
   // ---------- data ----------
   async function loadMenu() {
@@ -252,40 +259,43 @@
   const gOf = tab => S.groups.filter(g => g.tab === tab).sort((a, b) => a.sort - b.sort);
   const iOf = gid => S.items.filter(i => i.group_id === gid).sort((a, b) => a.sort - b.sort);
   const pv = v => v == null ? '' : String(Number(v));
-  function availCard(g, q) {
-    const its = iOf(g.id).filter(i => !q || i.name.toLowerCase().includes(q));
+  const mpred = () => { const q = S.msearch.trim().toLowerCase(), f = S.mfilter; return q || f ? (it => (!q || it.name.toLowerCase().includes(q)) && (!f || (f === 'sold' ? it.sold_out : it.hidden))) : null; };
+  function filterChips() {
+    const sold = S.items.filter(i => i.sold_out).length, hid = S.items.filter(i => i.hidden).length;
+    if (!sold && !hid && !S.mfilter) return '';
+    return '<div class="chips tight">' + (sold || S.mfilter === 'sold' ? '<button class="chip ' + (S.mfilter === 'sold' ? 'on' : '') + '" data-mfilter="sold">' + sold + ' sold out</button>' : '') + (hid || S.mfilter === 'hidden' ? '<button class="chip ' + (S.mfilter === 'hidden' ? 'on' : '') + '" data-mfilter="hidden">' + hid + ' hidden</button>' : '') + '</div>';
+  }
+  function availCard(g, pred) {
+    const its = iOf(g.id).filter(i => !pred || pred(i));
     return '<section class="card grp" data-gid="' + g.id + '"><div class="grp-h"><b class="gt">' + esc(g.title) + '</b></div>' + its.map(it =>
       '<div class="it av' + (it.hidden ? ' hid' : '') + '" data-iid="' + it.id + '"><div class="it-1"><span class="grow">' + esc(it.name) + (it.hidden ? ' <small class="sub">(hidden)</small>' : '') + '</span><label class="sw warn"><input type="checkbox" data-isold' + (it.sold_out ? ' checked' : '') + '><s></s>Sold out</label></div></div>').join('') + '</section>';
   }
   function pageMenu() {
-    if (!can('menu')) return '<h2 class="h2">Availability</h2><p class="sub" style="margin-bottom:12px">Switch "Sold out" on when something runs out. The website updates within seconds.</p><div class="search"><input type="search" placeholder="Search items" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div><div class="dc" id="mlist">' + menuList() + '</div>';
-    const gs = gOf(S.menuTab);
-    const chips = '<div class="chips">' + TABS.map(([k, l]) => '<button class="chip ' + (S.menuTab === k ? 'on' : '') + '" data-mtab="' + k + '">' + l + '<i>' + S.groups.filter(g => g.tab === k).length + '</i></button>').join('') + '</div>';
+    if (!can('menu')) return '<h2 class="h2">Availability</h2><p class="sub" style="margin-bottom:12px">Switch "Sold out" on when something runs out. The website updates within seconds.</p><div class="search"><input type="search" placeholder="Search items" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div>' + filterChips() + '<div class="dc" id="mlist">' + menuList() + '</div>';
     if (!S.groups.length) {
       return '<h2 class="h2">Menu</h2><div class="card"><h3>Menu is empty</h3><p class="sub" style="margin-bottom:14px">One tap copies the current website menu into the database. After that you can edit everything here.</p><button class="btn block" data-import>Import current menu</button></div>';
     }
-    const sold = S.items.filter(i => i.sold_out).length, hid = S.items.filter(i => i.hidden).length;
-    return '<h2 class="h2">Menu</h2><div class="search"><input type="search" placeholder="Search all items" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div>' +
-      (sold || hid ? '<p class="sub" style="margin:-4px 0 10px">' + (sold ? '<b>' + sold + '</b> sold out' : '') + (sold && hid ? ' · ' : '') + (hid ? '<b>' + hid + '</b> hidden' : '') + '</p>' : '') +
+    return '<h2 class="h2">Menu</h2><div class="mbar"><div class="search grow"><input type="search" placeholder="Search all items" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div><button class="btn ghost sm" data-bulk>Adjust prices</button></div>' + filterChips() +
       '<div class="dc" id="mlist">' + menuList() + '</div>' +
-      (S.msearch.trim() ? '' : '<button class="btn block" data-addgroup>+ Add section</button>') + '<p class="sub" style="text-align:center;margin-top:14px">Changes save automatically and show on the website within seconds.</p>';
+      (mpred() ? '' : '<button class="btn block" data-addgroup>+ Add section</button>') + '<p class="sub" style="text-align:center;margin-top:14px">Changes save automatically and show on the website within seconds.</p>';
   }
   function menuList() {
-    const q = S.msearch.trim().toLowerCase();
-    if (!q) {
+    const pred = mpred();
+    if (!pred) {
       const chips = '<div class="chips">' + TABS.map(([k, l]) => '<button class="chip ' + (S.menuTab === k ? 'on' : '') + '" data-mtab="' + k + '">' + l + '<i>' + S.groups.filter(g => g.tab === k).length + '</i></button>').join('') + '</div>';
       const gs = gOf(S.menuTab); return chips + (gs.length ? gs.map(g => can('menu') ? groupCard(g) : availCard(g)).join('') : '<div class="empty">No sections in this tab yet.</div>');
     }
-    const out = TABS.flatMap(([k]) => gOf(k)).filter(g => iOf(g.id).some(i => i.name.toLowerCase().includes(q))).map(g => can('menu') ? groupCard(g, q) : availCard(g, q));
-    return out.length ? out.join('') : '<div class="empty">No items match "' + esc(S.msearch) + '".</div>';
+    const out = TABS.flatMap(([k]) => gOf(k)).filter(g => iOf(g.id).some(pred)).map(g => can('menu') ? groupCard(g, pred) : availCard(g, pred));
+    return out.length ? out.join('') : '<div class="empty">' + (S.msearch.trim() ? 'No items match "' + esc(S.msearch) + '".' : S.mfilter === 'sold' ? 'Nothing is sold out.' : 'Nothing is hidden.') + '</div>';
   }
-  function groupCard(g, q) {
-    const its = iOf(g.id), gs = gOf(g.tab), idx = gs.indexOf(g);
+  function groupCard(g, pred) {
+    const its = iOf(g.id), gs = gOf(g.tab), idx = gs.indexOf(g), col = !pred && S.collapsed[g.id], allSold = its.length && its.every(x => x.sold_out);
     return '<section class="card grp" data-gid="' + g.id + '"><div class="grp-h"><input type="text" value="' + esc(g.title) + '" data-gtitle aria-label="Section name" maxlength="60">' +
       '<button class="iconb" data-gmove="-1" aria-label="Move section up"' + (idx === 0 ? ' disabled' : '') + '>' + ICON.up + '</button><button class="iconb" data-gmove="1" aria-label="Move section down"' + (idx === gs.length - 1 ? ' disabled' : '') + '>' + ICON.down + '</button></div>' +
-      '<div class="grp-o"><label class="sw"><input type="checkbox" data-gdual' + (g.dual ? ' checked' : '') + '><s></s>Hot &amp; Iced prices</label><span class="sp"></span><button class="btn ghost sm" data-gsold="' + (its.every(x => x.sold_out) ? 0 : 1) + '">' + (its.length && its.every(x => x.sold_out) ? 'All back in stock' : 'All sold out') + '</button><button class="iconb del" data-gdel aria-label="Delete section">' + ICON.trash + '</button></div>' +
-      its.map((it, n) => q && !it.name.toLowerCase().includes(q) ? '' : itemRow(g, it, n, its.length)).join('') +
-      '<div class="addrow"><button class="btn sm" data-additem>+ Add item</button></div></section>';
+      '<div class="grp-o"><button class="linkb' + (col ? ' shut' : '') + '" data-gtoggle aria-expanded="' + (col ? 'false' : 'true') + '">' + ICON.down + its.length + (its.length === 1 ? ' item' : ' items') + '</button><span class="sp"></span>' +
+      (col ? '' : '<label class="sw"><input type="checkbox" data-gdual' + (g.dual ? ' checked' : '') + '><s></s>Hot &amp; Iced</label><button class="btn ghost sm" data-gsold="' + (allSold ? 0 : 1) + '">' + (allSold ? 'All back in stock' : 'All sold out') + '</button>') +
+      '<button class="iconb del" data-gdel aria-label="Delete section">' + ICON.trash + '</button></div>' +
+      (col ? '' : its.map((it, n) => pred && !pred(it) ? '' : itemRow(g, it, n, its.length)).join('') + '<div class="addrow"><button class="btn sm" data-additem>+ Add item</button></div>') + '</section>';
   }
   function itemRow(g, it, n, len) {
     return '<div class="it ' + (it.hidden ? 'hid' : '') + '" data-iid="' + it.id + '"><div class="it-1"><input type="text" value="' + esc(it.name) + '" data-iname aria-label="Item name" maxlength="80">' +
@@ -331,16 +341,79 @@
     await loadMenu(); renderPage(); toast('Menu imported');
   }
 
+  // ---------- bulk price change ----------
+  function bulkPlan(f) {
+    const scope = f.scope.value, up = f.mode.value === 'up', pct = f.kind.value === 'pct', raw = parseFloat(String(f.amount.value).replace(',', '.')), round = f.round.checked;
+    if (!(raw > 0)) return null;
+    const gids = new Set((scope === 'all' ? S.groups : gOf(S.menuTab)).map(g => g.id)), out = [];
+    S.items.filter(i => gids.has(i.group_id)).forEach(it => {
+      const ch = {}; let name = it.name;
+      ['hot', 'iced'].forEach(k => {
+        if (it[k] == null) return; const old = Number(it[k]); let nv = pct ? old * (1 + (up ? 1 : -1) * raw / 100) : old + (up ? 1 : -1) * raw;
+        nv = Math.max(0, round ? Math.round(nv * 20) / 20 : Math.round(nv * 1000) / 1000); if (nv !== old) ch[k] = { old, nv };
+      });
+      if (Object.keys(ch).length) out.push({ it, ch, name });
+    });
+    return out;
+  }
+  function bulkPreview(f) {
+    const p = bulkPlan(f), el = document.getElementById('bulkprev'); if (!el) return;
+    if (!p) { el.textContent = 'Enter an amount to preview.'; return; }
+    const n = p.reduce((a, x) => a + Object.keys(x.ch).length, 0), e = p[0];
+    el.textContent = n ? n + ' price' + (n > 1 ? 's' : '') + ' will change. Example: ' + e.name + ' ' + Object.values(e.ch).map(c => pv(c.old) + ' to ' + pv(c.nv)).join(', ') + ' OMR.' : 'No prices would change.';
+  }
+  function openBulk() {
+    const tl = (TABS.find(t => t[0] === S.menuTab) || ['', ''])[1];
+    openModal('<div class="mp-h"><b>Adjust prices</b><button class="iconb" data-mclose aria-label="Close">' + ICON.x + '</button></div><form data-form="bulk" class="mp-b"><label class="f"><span>Apply to</span><select name="scope"><option value="tab">This tab only (' + esc(tl) + ')</option><option value="all">Whole menu</option></select></label>' +
+      '<div class="row"><label class="f grow"><span>Change</span><select name="mode"><option value="up">Increase</option><option value="down">Decrease</option></select></label><label class="f grow"><span>By</span><div class="row"><input type="text" name="amount" inputmode="decimal" placeholder="10" autocomplete="off"><select name="kind" style="width:auto"><option value="pct">%</option><option value="omr">OMR</option></select></div></label></div>' +
+      '<label class="sw" style="margin-bottom:8px"><input type="checkbox" name="round" checked><s></s>Round to the nearest 0.05</label><p class="sub" id="bulkprev" style="margin-bottom:12px">Enter an amount to preview.</p><button class="btn block" type="submit">Apply</button></form>');
+    const a = document.querySelector('#modal [name=amount]'); if (a) a.focus();
+  }
+
+  // ---------- modal ----------
+  function openModal(html, cls, slot) {
+    closeModal(true);
+    const m = document.createElement('div'); m.id = 'modal'; m.className = 'modal';
+    m.innerHTML = '<div class="mp ' + (cls || '') + '" role="dialog" aria-modal="true"' + (slot ? ' data-slot="' + slot + '"' : '') + '>' + html + '</div>';
+    document.body.appendChild(m); document.body.classList.add('noscroll');
+  }
+  function closeModal(keep) { const m = document.getElementById('modal'); if (m) m.remove(); if (!keep) { document.body.classList.remove('noscroll'); S.view = null; } }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
   // ---------- PHOTOS ----------
+  const PGROUPS = [['Place', ['storefront-sign', 'interior']], ['Coffee', ['coffee-cold-foam', 'coffee-latte-art', 'coffee-cake']], ['Matcha, drinks and tea', ['matcha', 'strawberry-matcha', 'red-smoothie', 'date-smoothie', 'orange-juice', 'drinks-trio', 'tea-table']], ['Sweets', ['tiramisu', 'chocolate-cake', 'pistachio-cheesecake', 'lotus-cheesecake', 'chocolate-cheesecake']]];
+  const slotLabel = k => (SLOTS.find(x => x[0] === k) || [k, k])[1];
+  const slotSrc = k => (S.settings.images || {})[k] || '../img/' + k + '.webp';
   function pagePhotos() {
     const imgs = S.settings.images || {};
-    return '<h2 class="h2">Photos</h2><p class="sub" style="margin-bottom:14px">Tap Replace to change a photo on the website. Pick a photo from your phone; it is resized automatically.</p><div class="pgrid">' +
-      SLOTS.map(([k, l]) => {
-        const custom = imgs[k];
-        return '<div class="ph' + (S.busy['p' + k] ? ' busy' : '') + '" data-slot="' + k + '"><img src="' + esc(custom || '../img/' + k + '.webp') + '" alt="" loading="lazy"><div><b>' + esc(l) + '</b>' + (custom ? '<small>Custom photo</small>' : '') +
-          '<label class="btn sm ghost" style="cursor:pointer">' + (S.busy['p' + k] ? 'Uploading' : 'Replace') + '<input type="file" accept="image/*" data-pfile hidden></label>' +
-          (custom ? '<button class="btn sm danger" data-preset>Use original</button>' : '') + '</div></div>';
-      }).join('') + '</div>';
+    return '<h2 class="h2">Photos</h2><p class="sub" style="margin-bottom:14px">Tap a photo to see it larger, rotate it or restore the original.' + (matchMedia('(hover:hover)').matches ? ' You can also drag a file onto a photo.' : '') + '</p>' +
+      PGROUPS.map(([t, keys]) => '<h3 class="ph-t">' + esc(t) + '</h3><div class="pgrid">' + keys.map(k => {
+        const custom = imgs[k], busy = S.busy['p' + k];
+        return '<div class="ph' + (busy ? ' busy' : '') + '" data-slot="' + k + '"><button class="ph-i" data-pview aria-label="View ' + esc(slotLabel(k)) + '"><img src="' + esc(slotSrc(k)) + '" alt="" loading="lazy">' + (custom ? '<span class="ph-tag">Custom</span>' : '') + '</button><div><b>' + esc(slotLabel(k)) + '</b>' +
+          '<label class="btn sm ghost" style="cursor:pointer">' + (busy ? 'Uploading' : 'Replace') + '<input type="file" accept="image/*" data-pfile hidden></label></div></div>';
+      }).join('') + '</div>').join('');
+  }
+  function openViewer(slot) {
+    S.view = slot; const custom = !!(S.settings.images || {})[slot], busy = S.busy['p' + slot];
+    openModal('<div class="mp-h"><b>' + esc(slotLabel(slot)) + '</b><button class="iconb" data-mclose aria-label="Close">' + ICON.x + '</button></div><div class="mp-img' + (busy ? ' busy' : '') + '"><img src="' + esc(slotSrc(slot)) + '" alt="">' + (busy ? '<span class="mp-busy">Working</span>' : '') + '</div>' +
+      '<div class="mp-a"><label class="btn">' + ICON.ul + 'Replace<input type="file" accept="image/*" data-pfile hidden></label><button class="btn ghost" data-protate="-1">' + ICON.rotl + 'Rotate left</button><button class="btn ghost" data-protate="1">' + ICON.rotr + 'Rotate right</button><button class="btn ghost" data-pdown>' + ICON.dl + 'Download</button>' + (custom ? '<button class="btn ghost" data-preset>Use original</button>' : '') + '</div>', 'view', slot);
+  }
+  async function rotateBlob(blob, dir) {
+    const url = URL.createObjectURL(blob);
+    try {
+      const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Could not read the photo')); i.src = url; });
+      const c = document.createElement('canvas'); c.width = im.naturalHeight; c.height = im.naturalWidth; const x = c.getContext('2d');
+      x.translate(c.width / 2, c.height / 2); x.rotate(dir * Math.PI / 2); x.drawImage(im, -im.naturalWidth / 2, -im.naturalHeight / 2);
+      return await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('Could not rotate')), 'image/jpeg', .9));
+    } finally { URL.revokeObjectURL(url); }
+  }
+  async function rotatePhoto(slot, dir) {
+    try { const r = await fetch(slotSrc(slot), { cache: 'no-store' }); if (!r.ok) throw new Error('Could not load the photo'); await uploadPhoto(slot, await rotateBlob(await r.blob(), dir)); }
+    catch (e) { toast(e.message || 'Could not rotate', true); }
+  }
+  async function downloadPhoto(slot) {
+    try { const r = await fetch(slotSrc(slot), { cache: 'no-store' }), b = await r.blob(), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = slot + (b.type.includes('webp') ? '.webp' : '.jpg'); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+    catch (e) { toast('Could not download', true); }
   }
   function resizeToJpeg(file, max) {
     return new Promise((res, rej) => {
@@ -355,7 +428,7 @@
     });
   }
   async function uploadPhoto(slot, file) {
-    S.busy['p' + slot] = true; renderPage();
+    S.busy['p' + slot] = true; renderPage(); if (S.view === slot) openViewer(slot);
     try {
       const blob = await resizeToJpeg(file, 1600), path = slot + '-' + Date.now() + '.jpg';
       const up = await db.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
@@ -365,13 +438,13 @@
       const ok = await saveSetting('images', Object.assign({}, S.settings.images || {}, { [slot]: url }));
       if (ok) { toast('Photo updated'); removeOld(old); } else { await db.storage.from('photos').remove([path]); }
     } catch (e) { toast(e.message || 'Upload failed', true); }
-    S.busy['p' + slot] = false; renderPage();
+    S.busy['p' + slot] = false; renderPage(); if (S.view === slot) openViewer(slot);
   }
   function removeOld(url) { try { const m = /\/photos\/([^?]+)/.exec(url || ''); if (m) db.storage.from('photos').remove([decodeURIComponent(m[1])]); } catch (e) {} }
   async function resetPhoto(slot) {
     const imgs = Object.assign({}, S.settings.images || {}), old = imgs[slot]; delete imgs[slot];
     if (await saveSetting('images', imgs)) { toast('Original photo restored'); removeOld(old); }
-    renderPage();
+    renderPage(); if (S.view === slot) openViewer(slot);
   }
 
   // ---------- SETTINGS ----------
@@ -390,8 +463,7 @@
       '<label class="f"><span>Opens</span><select name="open">' + opts(4, 12, h.open) + '</select></label><label class="f"><span>Closes Sun to Wed</span><select name="close_sun_wed">' + opts(18, 24, h.close_sun_wed) + '</select></label><label class="f"><span>Closes Thu to Sat</span><select name="close_thu_sat">' + opts(18, 24, h.close_thu_sat) + '</select></label><button class="btn block" type="submit">Save hours</button></form>' +
       '<form class="card" data-form="rating"><h3>Google rating</h3><div class="row"><label class="f grow"><span>Stars (e.g. 4.9)</span><input type="text" name="score" inputmode="decimal" value="' + esc(r.score) + '" maxlength="4"></label><label class="f grow"><span>Number of reviews</span><input type="number" name="count" min="0" max="99999" value="' + esc(r.count) + '"></label></div>' +
       '<label class="f"><span>Link to your Google reviews</span><input type="text" name="url" value="' + esc(r.url) + '" placeholder="https://"></label><button class="btn block" type="submit">Save rating</button></form>' +
-      '<form class="card" data-form="password"><h3>Account</h3><p class="sub" style="margin-bottom:10px">Signed in as <b>' + esc(S.user && S.user.email) + '</b></p><label class="f"><span>New password (min 8 characters)</span><input type="password" name="pw" autocomplete="new-password" minlength="8"></label><button class="btn block" type="submit">Change password</button></form>' +
-      '<div class="card"><h3>Order alerts</h3><label class="sw"><input type="checkbox" data-sound' + (localStorage.getItem('genius-mute') === '1' ? '' : ' checked') + '><s></s>Beep when a new order arrives (this device)</label><button class="btn ghost sm" data-testsound style="margin-top:8px">Test sound</button></div>' +
+      acct + alerts +
       (isOwner() ? teamCard() : '') +
       (!can('menu') ? '' : '<div class="card"><h3>Backup</h3><p class="sub" style="margin-bottom:10px">Download a copy of your whole menu and settings as a file. Keep it somewhere safe.</p><button class="btn ghost block" data-backup>Download backup</button></div>') +
       '<button class="btn danger block" data-signout>Sign out</button>';
@@ -432,6 +504,20 @@
         else if (!(count >= 0)) { toast('Enter the number of reviews', true); }
         else if (u && !/^https:\/\//i.test(u)) { toast('The link must start with https://', true); }
         else if (await saveSetting('rating', { score, count, url: u })) toast('Rating saved');
+      } else if (n === 'bulk') {
+        const p = bulkPlan(f);
+        if (!p) toast('Enter an amount', true);
+        else if (!p.length) toast('No prices would change', true);
+        else {
+          closeModal();
+          p.forEach(x => Object.entries(x.ch).forEach(([k, c]) => { x.it[k] = c.nv; })); renderPage();
+          const rs = await Promise.all(p.map(x => db.from('menu_items').update(Object.fromEntries(Object.entries(x.ch).map(([k, c]) => [k, c.nv]))).eq('id', x.it.id)));
+          if (rs.find(r => r.error)) { toast('Some prices could not be saved', true); await loadMenu().catch(() => {}); renderPage(); }
+          else undoToast(p.length + ' item' + (p.length > 1 ? 's' : '') + ' updated', async () => {
+            p.forEach(x => Object.entries(x.ch).forEach(([k, c]) => { x.it[k] = c.old; })); renderPage();
+            await Promise.all(p.map(x => db.from('menu_items').update(Object.fromEntries(Object.entries(x.ch).map(([k, c]) => [k, c.old]))).eq('id', x.it.id))); toast('Prices restored');
+          });
+        }
       } else if (n === 'teamnew') {
         const em = String(d.get('email') || '').trim().toLowerCase(), pw = String(d.get('password') || ''), rl = d.get('role');
         const role = rl === 'owner' ? 'owner' : 'staff', perms = role === 'owner' ? ALLP : d.getAll('perm');
@@ -456,7 +542,8 @@
   // ---------- events ----------
   const $ = (el, sel) => el.closest(sel);
   document.addEventListener('click', async e => {
-    const t = e.target, b = t.closest('button'); if (!b || !S.user) return;
+    const t = e.target; if (t.id === 'modal') { closeModal(); return; }
+    const b = t.closest('button'); if (!b || !S.user) return;
     if ('teamdel' in b.dataset) {
       const em = $(b, '[data-email]').dataset.email; if (!confirm('Delete ' + em + '? Their login is removed and they can no longer sign in.')) return;
       const r = await db.rpc('admin_remove_user', { p_email: em }); if (r.error) toast(r.error.message, true); else { await loadTeam(); renderPage(); toast('User removed'); } return;
@@ -475,7 +562,15 @@
     if ('genpw' in b.dataset) { const i = b.closest('form').querySelector('[name=password]'); i.value = genPw(); return; }
     if ('credcopy' in b.dataset) { try { await navigator.clipboard.writeText(credText(S.cred)); toast('Copied'); } catch (er) { toast('Select and copy the text manually', true); } return; }
     if ('creddone' in b.dataset) { S.cred = null; renderPage(); return; }
-    if (b.dataset.go)    if (b.dataset.go) { if (b.dataset.go !== 'settings') S.cred = null; S.tab = b.dataset.go; renderPage(); window.scrollTo(0, 0); return; }
+    if ('bulk' in b.dataset) { openBulk(); return; }
+    if ('gtoggle' in b.dataset) { const gid = $(b, '[data-gid]').dataset.gid; S.collapsed[gid] = !S.collapsed[gid]; renderPage(); return; }
+    if (b.dataset.mfilter) { S.mfilter = S.mfilter === b.dataset.mfilter ? '' : b.dataset.mfilter; renderPage(); return; }
+    if ('mclose' in b.dataset) { closeModal(); return; }
+    if ('pview' in b.dataset) { openViewer($(b, '[data-slot]').dataset.slot); return; }
+    if (b.dataset.protate) { rotatePhoto($(b, '[data-slot]').dataset.slot, +b.dataset.protate); return; }
+    if ('pdown' in b.dataset) { downloadPhoto($(b, '[data-slot]').dataset.slot); return; }
+    if ('undo' in b.dataset) { const f = S.undoFn; S.undoFn = null; $toast.classList.remove('show', 'act'); if (f) f(); return; }
+    if (b.dataset.go) { if (b.dataset.go !== 'settings') S.cred = null; S.tab = b.dataset.go; renderPage(); window.scrollTo(0, 0); return; }
     if ('csv' in b.dataset) { exportCsv(); return; }
     if ('backup' in b.dataset) { downloadBackup(); return; }
     if ('testsound' in b.dataset) { const m = localStorage.getItem('genius-mute'); localStorage.removeItem('genius-mute'); notify(1); if (m) localStorage.setItem('genius-mute', m); return; }
@@ -518,8 +613,14 @@
       S.items.push(r.data); renderPage(); toast('Duplicated. Rename it'); return;
     }
     if (it && 'idel' in b.dataset) {
-      if (!confirm('Delete "' + it.name + '"?')) return;
-      if (await mut(db.from('menu_items').delete().eq('id', it.id), 'Item deleted')) { S.items = S.items.filter(x => x.id !== it.id); renderPage(); }
+      const copy = Object.assign({}, it), r = await db.from('menu_items').delete().eq('id', it.id);
+      if (r.error) { toast('Could not delete: ' + r.error.message, true); return; }
+      S.items = S.items.filter(x => x.id !== it.id); renderPage();
+      undoToast('Deleted "' + copy.name + '"', async () => {
+        const ir = await db.from('menu_items').insert(copy).select().single();
+        if (ir.error) { toast('Could not restore: ' + ir.error.message, true); return; }
+        S.items.push(ir.data); renderPage(); toast('Restored');
+      });
       return;
     }
     if (b.dataset.preset !== undefined) { const c = $(b, '[data-slot]'); if (c && confirm('Go back to the original photo?')) resetPhoto(c.dataset.slot); }
@@ -558,9 +659,13 @@
 
   document.addEventListener('input', e => {
     const t = e.target;
+    if (t.closest('[data-form=bulk]')) { bulkPreview(t.closest('form')); return; }
     if (t.matches('[data-osearch]')) { S.osearch = t.value; const l = document.getElementById('olist'); if (l) l.innerHTML = ordersList(); }
     else if (t.matches('[data-msearch]')) { S.msearch = t.value; const l = document.getElementById('mlist'); if (l) l.innerHTML = menuList(); }
   });
+  document.addEventListener('dragover', e => { const c = e.target.closest && e.target.closest('.ph'); if (c && S.user) { e.preventDefault(); c.classList.add('drop'); } });
+  document.addEventListener('dragleave', e => { const c = e.target.closest && e.target.closest('.ph'); if (c) c.classList.remove('drop'); });
+  document.addEventListener('drop', e => { const c = e.target.closest && e.target.closest('.ph'); if (!c || !S.user) return; e.preventDefault(); c.classList.remove('drop'); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) uploadPhoto(c.dataset.slot, f); else toast('Drop an image file', true); });
   document.addEventListener('submit', e => { const f = e.target.closest('[data-form]'); if (f) { e.preventDefault(); submitForm(f); } });
 
   start().catch(err => { show(); $app.innerHTML = '<div class="login"><div class="card"><h3>Something went wrong</h3><p class="err">' + esc(err.message || err) + '</p></div></div>'; });
