@@ -18,6 +18,7 @@
     photos: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-5-8 8"/></svg>',
     settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.5-2.3.9a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.5a7 7 0 00-2 1.2l-2.3-.9-2 3.5 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.5 2.3-.9a7 7 0 002 1.2l.4 2.5h4l.4-2.5a7 7 0 002-1.2l2.3.9 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>',
     insights: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>',
+    copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>',
     up: '<svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
     down: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
     trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'
@@ -59,7 +60,7 @@
     if (S.tab === 'orders') renderPage(); else renderNav();
   }
   function notify(n) {
-    toast('🔔 ' + n + ' new order' + (n > 1 ? 's' : ''));
+    toast(n + ' new order' + (n > 1 ? 's' : ''));
     try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
     if (localStorage.getItem('genius-mute') === '1') return;
     try {
@@ -136,7 +137,7 @@
 
   // ---------- shell ----------
   function renderShell() {
-    $app.innerHTML = '<header class="top"><span class="logo"></span><h1>Genius Admin</h1><a href="../" target="_blank" rel="noopener">View site ↗</a><button class="topout" data-signout>Sign out</button></header><div class="page" id="page"></div><nav class="nav" id="nav"></nav>';
+    $app.innerHTML = '<header class="top"><span class="logo"></span><h1>Genius Admin</h1><a href="../" target="_blank" rel="noopener">View site</a><button class="topout" data-signout>Sign out</button></header><div class="page" id="page"></div><nav class="nav" id="nav"></nav>';
     renderNav(); renderPage();
   }
   function renderNav() {
@@ -145,7 +146,7 @@
     const tabs = [['orders', 'Orders', can('orders')], ['menu', can('menu') ? 'Menu' : 'Availability', can('menu') || can('availability')], ['insights', 'Insights', can('insights')], ['photos', 'Photos', can('photos')], ['settings', 'Settings', true]].filter(t => t[2]);
     if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
     n.innerHTML = tabs.map(([k, l]) =>
-      '<button data-go="' + k + '" class="' + (S.tab === k ? 'on' : '') + '" aria-label="' + l + '">' + ICON[k] + l + (k === 'orders' && nc ? '<span class="badge">' + nc + '</span>' : '') + '</button>').join('') + '<a class="site" href="../" target="_blank" rel="noopener">View website ↗</a><div class="who"><b>' + esc(S.user && S.user.email) + '</b><span>' + (isOwner() ? 'Owner' : 'Staff') + '</span></div><button class="out" data-signout>Sign out</button>';
+      '<button data-go="' + k + '" class="' + (S.tab === k ? 'on' : '') + '" aria-label="' + l + '">' + ICON[k] + l + (k === 'orders' && nc ? '<span class="badge">' + nc + '</span>' : '') + '</button>').join('') + '<a class="site" href="../" target="_blank" rel="noopener">View website</a><div class="who"><b>' + esc(S.user && S.user.email) + '</b><span>' + (isOwner() ? 'Owner' : 'Staff') + '</span></div><button class="out" data-signout>Sign out</button>';
     document.title = (nc ? '(' + nc + ') ' : '') + 'Genius Admin';
   }
   function renderPage() {
@@ -178,8 +179,8 @@
     const sum = td.reduce((s, o) => s + Number(o.total), 0);
     const act = S.orders.filter(o => ['new', 'preparing', 'ready'].includes(o.status));
     return '<h2 class="h2">Orders</h2><div class="stats"><div class="stat"><b>' + td.length + '</b><span>Orders today</span></div><div class="stat"><b>' + omr(sum) + '</b><span>Today\'s total</span></div>' +
-      '<div class="stat"><b>' + act.length + '</b><span>Active now</span></div><div class="stat"><b>' + (td.length ? omr(sum / td.length) : '—') + '</b><span>Average order</span></div></div>' +
-      '<div class="chips">' + [['active', 'Active', act.length], ['today', 'Today'], ['done', 'Done'], ['all', 'All']].map(([k, l, c]) => '<button class="chip ' + (S.ordersFilter === k ? 'on' : '') + '" data-ofilter="' + k + '">' + l + (c ? '<i>' + c + '</i>' : '') + '</button>').join('') + '<button class="chip" data-refresh>↻ Refresh</button><button class="chip" data-csv>↓ Export CSV</button></div>' +
+      '<div class="stat"><b>' + act.length + '</b><span>Active now</span></div><div class="stat"><b>' + (td.length ? omr(sum / td.length) : '-') + '</b><span>Average order</span></div></div>' +
+      '<div class="chips">' + [['active', 'Active', act.length], ['today', 'Today'], ['done', 'Done'], ['all', 'All']].map(([k, l, c]) => '<button class="chip ' + (S.ordersFilter === k ? 'on' : '') + '" data-ofilter="' + k + '">' + l + (c ? '<i>' + c + '</i>' : '') + '</button>').join('') + '<button class="chip" data-refresh>Refresh</button><button class="chip" data-csv>Export CSV</button></div>' +
       '<div class="search"><input type="search" placeholder="Search name, phone, item or #id" value="' + esc(S.osearch) + '" data-osearch aria-label="Search orders"></div>' +
       '<div class="dc" id="olist">' + ordersList() + '</div>' +
       '<p class="sub" style="text-align:center">Orders also arrive on WhatsApp. Here you can track their status. Last ' + S.orders.length + ' orders loaded.</p>';
@@ -204,16 +205,16 @@
   function waLink(o) {
     const n = waNum(o.phone); if (!n) return '';
     const who = o.name ? ' ' + o.name : '';
-    const m = o.status === 'ready' ? 'Salam' + who + ', your Genius Coffee Bar order #' + o.id + ' is ready for pickup ☕' : o.status === 'preparing' ? 'Salam' + who + ', we are preparing your order #' + o.id + ' at Genius Coffee Bar.' : 'Salam' + who + ', this is Genius Coffee Bar about your order #' + o.id + '.';
+    const m = o.status === 'ready' ? 'Salam' + who + ', your Genius Coffee Bar order #' + o.id + ' is ready for pickup.' : o.status === 'preparing' ? 'Salam' + who + ', we are preparing your order #' + o.id + ' at Genius Coffee Bar.' : 'Salam' + who + ', this is Genius Coffee Bar about your order #' + o.id + '.';
     return 'https://wa.me/' + n + '?text=' + encodeURIComponent(m);
   }
   function orderCard(o) {
     const nx = STATUS_NEXT[o.status];
-    return '<article class="card ord s-' + o.status + '" data-oid="' + o.id + '"><div class="ord-h"><div><b>' + esc(o.name || 'Guest') + '</b><div class="sub">' + muscat(o.created_at, { hour: '2-digit', minute: '2-digit' }) + ' · ' + ago(o.created_at) + ' · ' + esc(o.pickup || '') + '</div>' + (o.phone ? '<div class="sub">📞 <a href="tel:' + esc(o.phone) + '">' + esc(o.phone) + '</a></div>' : '') + '</div><span class="tag ' + o.status + '">' + o.status + '</span></div>' +
+    return '<article class="card ord s-' + o.status + '" data-oid="' + o.id + '"><div class="ord-h"><div><b>' + esc(o.name || 'Guest') + '</b><div class="sub">' + muscat(o.created_at, { hour: '2-digit', minute: '2-digit' }) + ' · ' + ago(o.created_at) + ' · ' + esc(o.pickup || '') + '</div>' + (o.phone ? '<div class="sub">Phone: <a href="tel:' + esc(o.phone) + '">' + esc(o.phone) + '</a></div>' : '') + '</div><span class="tag ' + o.status + '">' + o.status + '</span></div>' +
       '<ul>' + (o.items || []).map(i => '<li><span>' + i.q + '× ' + esc(i.n) + (i.v ? ' <small class="sub">(' + esc(i.v) + ')</small>' : '') + '</span><span>' + omr(i.p * i.q) + '</span></li>').join('') + '</ul>' +
-      '<div class="tot"><span>Total</span><span>' + omr(o.total) + '</span></div>' + (o.note ? '<div class="note">📝 ' + esc(o.note) + '</div>' : '') +
+      '<div class="tot"><span>Total</span><span>' + omr(o.total) + '</span></div>' + (o.note ? '<div class="note">Note: ' + esc(o.note) + '</div>' : '') +
       ((nx || o.status === 'new' || o.status === 'preparing' || o.status === 'ready') ? '<div class="acts">' + (nx ? '<button class="btn grow" data-ostatus="' + nx[0] + '">' + nx[1] + '</button>' : '') +
-        (['new', 'preparing', 'ready'].includes(o.status) ? '<button class="btn danger" data-ostatus="cancelled">Cancel</button>' : '') + '</div>' : '') + '<div class="acts">' + (waLink(o) ? '<a class="btn ghost sm wa" href="' + waLink(o) + '" target="_blank" rel="noopener">💬 WhatsApp customer</a>' : '') + '<button class="btn ghost sm" data-oprint>🖨 Print</button></div>' + '</article>';
+        (['new', 'preparing', 'ready'].includes(o.status) ? '<button class="btn danger" data-ostatus="cancelled">Cancel</button>' : '') + '</div>' : '') + '<div class="acts">' + (waLink(o) ? '<a class="btn ghost sm wa" href="' + waLink(o) + '" target="_blank" rel="noopener">WhatsApp customer</a>' : '') + '<button class="btn ghost sm" data-oprint>Print</button></div>' + '</article>';
   }
   async function setOrder(id, status) {
     const o = S.orders.find(x => x.id === id); if (!o) return;
@@ -238,7 +239,7 @@
     const hm = Math.max(1, ...hrs), peak = hrs.indexOf(Math.max(...hrs));
     const canc = S.orders.filter(o => o.status === 'cancelled' && now - new Date(o.created_at) < days * 864e5).length;
     return '<h2 class="h2">Insights</h2><div class="chips">' + [[7, 'Last 7 days'], [14, 'Last 14 days'], [30, 'Last 30 days']].map(([k, l]) => '<button class="chip ' + (S.range === k ? 'on' : '') + '" data-range="' + k + '">' + l + '</button>').join('') + '</div>' +
-      '<div class="stats four"><div class="stat"><b>' + omr(rev) + '</b><span>Sales</span></div><div class="stat"><b>' + ok.length + '</b><span>Orders</span></div><div class="stat"><b>' + (ok.length ? omr(rev / ok.length) : '—') + '</b><span>Average order</span></div><div class="stat"><b>' + canc + '</b><span>Cancelled</span></div></div>' +
+      '<div class="stats four"><div class="stat"><b>' + omr(rev) + '</b><span>Sales</span></div><div class="stat"><b>' + ok.length + '</b><span>Orders</span></div><div class="stat"><b>' + (ok.length ? omr(rev / ok.length) : '-') + '</b><span>Average order</span></div><div class="stat"><b>' + canc + '</b><span>Cancelled</span></div></div>' +
       (ok.length ? '' : '<div class="empty">No orders in this period yet. Orders placed on the website appear here.</div>') +
       '<div class="card wide"><h3>Sales per day</h3><div class="bars">' + cols.map(c => '<div class="bar" title="' + c.full + ': ' + omr(c.v.t) + ' · ' + c.v.n + ' orders"><i style="height:' + Math.max(c.v.t ? 4 : 0, c.v.t / mx * 100) + '%"></i><span>' + (days <= 14 || +c.lbl % 5 === 0 || +c.lbl === 1 ? c.lbl : '') + '</span></div>').join('') + '</div>' +
       (best && best.v.t ? '<p class="sub" style="margin-top:8px">Best day: <b>' + best.full + '</b> · ' + omr(best.v.t) + ' · ' + best.v.n + ' orders</p>' : '') + '</div>' +
@@ -257,17 +258,17 @@
       '<div class="it av' + (it.hidden ? ' hid' : '') + '" data-iid="' + it.id + '"><div class="it-1"><span class="grow">' + esc(it.name) + (it.hidden ? ' <small class="sub">(hidden)</small>' : '') + '</span><label class="sw warn"><input type="checkbox" data-isold' + (it.sold_out ? ' checked' : '') + '><s></s>Sold out</label></div></div>').join('') + '</section>';
   }
   function pageMenu() {
-    if (!can('menu')) return '<h2 class="h2">Availability</h2><p class="sub" style="margin-bottom:12px">Switch “Sold out” on when something runs out. The website updates within seconds.</p><div class="search"><input type="search" placeholder="Search items…" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div><div class="dc" id="mlist">' + menuList() + '</div>';
+    if (!can('menu')) return '<h2 class="h2">Availability</h2><p class="sub" style="margin-bottom:12px">Switch "Sold out" on when something runs out. The website updates within seconds.</p><div class="search"><input type="search" placeholder="Search items" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div><div class="dc" id="mlist">' + menuList() + '</div>';
     const gs = gOf(S.menuTab);
     const chips = '<div class="chips">' + TABS.map(([k, l]) => '<button class="chip ' + (S.menuTab === k ? 'on' : '') + '" data-mtab="' + k + '">' + l + '<i>' + S.groups.filter(g => g.tab === k).length + '</i></button>').join('') + '</div>';
     if (!S.groups.length) {
       return '<h2 class="h2">Menu</h2><div class="card"><h3>Menu is empty</h3><p class="sub" style="margin-bottom:14px">One tap copies the current website menu into the database. After that you can edit everything here.</p><button class="btn block" data-import>Import current menu</button></div>';
     }
     const sold = S.items.filter(i => i.sold_out).length, hid = S.items.filter(i => i.hidden).length;
-    return '<h2 class="h2">Menu</h2><div class="search"><input type="search" placeholder="Search all items…" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div>' +
+    return '<h2 class="h2">Menu</h2><div class="search"><input type="search" placeholder="Search all items" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div>' +
       (sold || hid ? '<p class="sub" style="margin:-4px 0 10px">' + (sold ? '<b>' + sold + '</b> sold out' : '') + (sold && hid ? ' · ' : '') + (hid ? '<b>' + hid + '</b> hidden' : '') + '</p>' : '') +
       '<div class="dc" id="mlist">' + menuList() + '</div>' +
-      (S.msearch.trim() ? '' : '<button class="btn block" data-addgroup>＋ Add section</button>') + '<p class="sub" style="text-align:center;margin-top:14px">Changes save automatically and show on the website within seconds.</p>';
+      (S.msearch.trim() ? '' : '<button class="btn block" data-addgroup>+ Add section</button>') + '<p class="sub" style="text-align:center;margin-top:14px">Changes save automatically and show on the website within seconds.</p>';
   }
   function menuList() {
     const q = S.msearch.trim().toLowerCase();
@@ -276,7 +277,7 @@
       const gs = gOf(S.menuTab); return chips + (gs.length ? gs.map(g => can('menu') ? groupCard(g) : availCard(g)).join('') : '<div class="empty">No sections in this tab yet.</div>');
     }
     const out = TABS.flatMap(([k]) => gOf(k)).filter(g => iOf(g.id).some(i => i.name.toLowerCase().includes(q))).map(g => can('menu') ? groupCard(g, q) : availCard(g, q));
-    return out.length ? out.join('') : '<div class="empty">No items match “' + esc(S.msearch) + '”.</div>';
+    return out.length ? out.join('') : '<div class="empty">No items match "' + esc(S.msearch) + '".</div>';
   }
   function groupCard(g, q) {
     const its = iOf(g.id), gs = gOf(g.tab), idx = gs.indexOf(g);
@@ -284,14 +285,14 @@
       '<button class="iconb" data-gmove="-1" aria-label="Move section up"' + (idx === 0 ? ' disabled' : '') + '>' + ICON.up + '</button><button class="iconb" data-gmove="1" aria-label="Move section down"' + (idx === gs.length - 1 ? ' disabled' : '') + '>' + ICON.down + '</button></div>' +
       '<div class="grp-o"><label class="sw"><input type="checkbox" data-gdual' + (g.dual ? ' checked' : '') + '><s></s>Hot &amp; Iced prices</label><span class="sp"></span><button class="btn ghost sm" data-gsold="' + (its.every(x => x.sold_out) ? 0 : 1) + '">' + (its.length && its.every(x => x.sold_out) ? 'All back in stock' : 'All sold out') + '</button><button class="iconb del" data-gdel aria-label="Delete section">' + ICON.trash + '</button></div>' +
       its.map((it, n) => q && !it.name.toLowerCase().includes(q) ? '' : itemRow(g, it, n, its.length)).join('') +
-      '<div class="addrow"><button class="btn sm" data-additem>＋ Add item</button></div></section>';
+      '<div class="addrow"><button class="btn sm" data-additem>+ Add item</button></div></section>';
   }
   function itemRow(g, it, n, len) {
     return '<div class="it ' + (it.hidden ? 'hid' : '') + '" data-iid="' + it.id + '"><div class="it-1"><input type="text" value="' + esc(it.name) + '" data-iname aria-label="Item name" maxlength="80">' +
       '<button class="iconb" data-imove="-1" aria-label="Move up"' + (n === 0 ? ' disabled' : '') + '>' + ICON.up + '</button><button class="iconb" data-imove="1" aria-label="Move down"' + (n === len - 1 ? ' disabled' : '') + '>' + ICON.down + '</button></div>' +
-      '<div class="it-2"><label class="pr"><span>' + (g.dual ? 'Hot OMR' : 'Price OMR') + '</span><input type="text" inputmode="decimal" value="' + pv(it.hot) + '" data-iprice="hot" placeholder="' + (g.dual ? '—' : '0.0') + '"></label>' +
-      (g.dual ? '<label class="pr"><span>Iced OMR</span><input type="text" inputmode="decimal" value="' + pv(it.iced) + '" data-iprice="iced" placeholder="—"></label>' : '') +
-      '<span class="sp"></span><div class="it-tools"><label class="sw warn"><input type="checkbox" data-isold' + (it.sold_out ? ' checked' : '') + '><s></s>Sold out</label><label class="sw"><input type="checkbox" data-ihide' + (it.hidden ? ' checked' : '') + '><s></s>Hide</label><button class="iconb" data-idup aria-label="Duplicate item" title="Duplicate">⧉</button><button class="iconb del" data-idel aria-label="Delete item">' + ICON.trash + '</button></div></div></div>';
+      '<div class="it-2"><label class="pr"><span>' + (g.dual ? 'Hot OMR' : 'Price OMR') + '</span><input type="text" inputmode="decimal" value="' + pv(it.hot) + '" data-iprice="hot" placeholder="' + (g.dual ? '-' : '0.0') + '"></label>' +
+      (g.dual ? '<label class="pr"><span>Iced OMR</span><input type="text" inputmode="decimal" value="' + pv(it.iced) + '" data-iprice="iced" placeholder="-"></label>' : '') +
+      '<span class="sp"></span><div class="it-tools"><label class="sw warn"><input type="checkbox" data-isold' + (it.sold_out ? ' checked' : '') + '><s></s>Sold out</label><label class="sw"><input type="checkbox" data-ihide' + (it.hidden ? ' checked' : '') + '><s></s>Hide</label><button class="iconb" data-idup aria-label="Duplicate item" title="Duplicate">' + ICON.copy + '</button><button class="iconb del" data-idel aria-label="Delete item">' + ICON.trash + '</button></div></div></div>';
   }
   async function mut(p, okMsg) {
     const r = await p;
@@ -327,7 +328,7 @@
         if (ir.error) { toast('Import failed: ' + ir.error.message, true); await loadMenu().catch(() => {}); renderPage(); return; }
       }
     }
-    await loadMenu(); renderPage(); toast('Menu imported ✓');
+    await loadMenu(); renderPage(); toast('Menu imported');
   }
 
   // ---------- PHOTOS ----------
@@ -337,7 +338,7 @@
       SLOTS.map(([k, l]) => {
         const custom = imgs[k];
         return '<div class="ph' + (S.busy['p' + k] ? ' busy' : '') + '" data-slot="' + k + '"><img src="' + esc(custom || '../img/' + k + '.webp') + '" alt="" loading="lazy"><div><b>' + esc(l) + '</b>' + (custom ? '<small>Custom photo</small>' : '') +
-          '<label class="btn sm ghost" style="cursor:pointer">' + (S.busy['p' + k] ? 'Uploading…' : 'Replace') + '<input type="file" accept="image/*" data-pfile hidden></label>' +
+          '<label class="btn sm ghost" style="cursor:pointer">' + (S.busy['p' + k] ? 'Uploading' : 'Replace') + '<input type="file" accept="image/*" data-pfile hidden></label>' +
           (custom ? '<button class="btn sm danger" data-preset>Use original</button>' : '') + '</div></div>';
       }).join('') + '</div>';
   }
@@ -362,7 +363,7 @@
       const url = db.storage.from('photos').getPublicUrl(path).data.publicUrl;
       const old = (S.settings.images || {})[slot];
       const ok = await saveSetting('images', Object.assign({}, S.settings.images || {}, { [slot]: url }));
-      if (ok) { toast('Photo updated ✓'); removeOld(old); } else { await db.storage.from('photos').remove([path]); }
+      if (ok) { toast('Photo updated'); removeOld(old); } else { await db.storage.from('photos').remove([path]); }
     } catch (e) { toast(e.message || 'Upload failed', true); }
     S.busy['p' + slot] = false; renderPage();
   }
@@ -383,16 +384,16 @@
     const alerts = '<div class="card"><h3>Order alerts</h3><label class="sw"><input type="checkbox" data-sound' + (localStorage.getItem('genius-mute') === '1' ? '' : ' checked') + '><s></s>Beep when a new order arrives (this device)</label><button class="btn ghost sm" data-testsound style="margin-top:8px">Test sound</button></div>';
     if (!can('settings')) return '<h2 class="h2">Settings</h2>' + acct + alerts + '<button class="btn danger block" data-signout>Sign out</button>';
     return '<h2 class="h2">Settings</h2>' +
-      '<form class="card" data-form="announcement"><h3>Announcement banner</h3><p class="sub" style="margin-bottom:10px">A bar across the top of the website, for example “Closed for Eid — back Friday”.</p>' +
+      '<form class="card" data-form="announcement"><h3>Announcement banner</h3><p class="sub" style="margin-bottom:10px">A bar across the top of the website, for example "Closed for Eid, back Friday".</p>' +
       '<label class="sw"><input type="checkbox" name="on"' + (a.on ? ' checked' : '') + '><s></s>Show banner</label><label class="f"><span>Message</span><input type="text" name="text" maxlength="140" value="' + esc(a.text) + '" placeholder="Short message"></label><button class="btn block" type="submit">Save banner</button></form>' +
-      '<form class="card" data-form="hours"><h3>Opening hours</h3><label class="sw warn" style="margin-bottom:10px"><input type="checkbox" name="temp_closed"' + (h.temp_closed ? ' checked' : '') + '><s></s>Temporarily closed (shows “Closed” on the site)</label>' +
-      '<label class="f"><span>Opens</span><select name="open">' + opts(4, 12, h.open) + '</select></label><label class="f"><span>Closes Sun – Wed</span><select name="close_sun_wed">' + opts(18, 24, h.close_sun_wed) + '</select></label><label class="f"><span>Closes Thu – Sat</span><select name="close_thu_sat">' + opts(18, 24, h.close_thu_sat) + '</select></label><button class="btn block" type="submit">Save hours</button></form>' +
+      '<form class="card" data-form="hours"><h3>Opening hours</h3><label class="sw warn" style="margin-bottom:10px"><input type="checkbox" name="temp_closed"' + (h.temp_closed ? ' checked' : '') + '><s></s>Temporarily closed (shows "Closed" on the site)</label>' +
+      '<label class="f"><span>Opens</span><select name="open">' + opts(4, 12, h.open) + '</select></label><label class="f"><span>Closes Sun to Wed</span><select name="close_sun_wed">' + opts(18, 24, h.close_sun_wed) + '</select></label><label class="f"><span>Closes Thu to Sat</span><select name="close_thu_sat">' + opts(18, 24, h.close_thu_sat) + '</select></label><button class="btn block" type="submit">Save hours</button></form>' +
       '<form class="card" data-form="rating"><h3>Google rating</h3><div class="row"><label class="f grow"><span>Stars (e.g. 4.9)</span><input type="text" name="score" inputmode="decimal" value="' + esc(r.score) + '" maxlength="4"></label><label class="f grow"><span>Number of reviews</span><input type="number" name="count" min="0" max="99999" value="' + esc(r.count) + '"></label></div>' +
-      '<label class="f"><span>Link to your Google reviews</span><input type="text" name="url" value="' + esc(r.url) + '" placeholder="https://…"></label><button class="btn block" type="submit">Save rating</button></form>' +
+      '<label class="f"><span>Link to your Google reviews</span><input type="text" name="url" value="' + esc(r.url) + '" placeholder="https://"></label><button class="btn block" type="submit">Save rating</button></form>' +
       '<form class="card" data-form="password"><h3>Account</h3><p class="sub" style="margin-bottom:10px">Signed in as <b>' + esc(S.user && S.user.email) + '</b></p><label class="f"><span>New password (min 8 characters)</span><input type="password" name="pw" autocomplete="new-password" minlength="8"></label><button class="btn block" type="submit">Change password</button></form>' +
       '<div class="card"><h3>Order alerts</h3><label class="sw"><input type="checkbox" data-sound' + (localStorage.getItem('genius-mute') === '1' ? '' : ' checked') + '><s></s>Beep when a new order arrives (this device)</label><button class="btn ghost sm" data-testsound style="margin-top:8px">Test sound</button></div>' +
       (isOwner() ? teamCard() : '') +
-      (!can('menu') ? '' : '<div class="card"><h3>Backup</h3><p class="sub" style="margin-bottom:10px">Download a copy of your whole menu and settings as a file. Keep it somewhere safe.</p><button class="btn ghost block" data-backup>↓ Download backup</button></div>') +
+      (!can('menu') ? '' : '<div class="card"><h3>Backup</h3><p class="sub" style="margin-bottom:10px">Download a copy of your whole menu and settings as a file. Keep it somewhere safe.</p><button class="btn ghost block" data-backup>Download backup</button></div>') +
       '<button class="btn danger block" data-signout>Sign out</button>';
   }
   const permBoxes = (sel, dis) => '<div class="perms">' + PERMS.map(([k, l, d]) => '<label class="sw"><input type="checkbox" name="perm" value="' + k + '"' + (sel.includes(k) ? ' checked' : '') + (dis ? ' disabled' : '') + '><s></s><span><b>' + l + '</b> <small>' + d + '</small></span></label>').join('') + '</div>';
@@ -400,7 +401,7 @@
   function credText(c) { return 'Genius Coffee Bar admin\nLink: ' + adminUrl() + '\nEmail: ' + c.email + '\nPassword: ' + c.password + '\n(You can change the password in Settings after signing in.)'; }
   function teamCard() {
     const me = (S.user && S.user.email || '').toLowerCase();
-    const cred = S.cred ? '<div class="cred"><b>✅ ' + esc(S.cred.msg) + '</b><pre>' + esc(credText(S.cred)) + '</pre><p class="sub">Shown only now. Share it privately.</p><div class="acts"><button class="btn sm" data-credcopy>Copy</button><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(credText(S.cred)) + '">Send on WhatsApp</a><a class="btn sm ghost" href="mailto:' + encodeURIComponent(S.cred.email) + '?subject=' + encodeURIComponent('Your Genius Coffee Bar admin login') + '&body=' + encodeURIComponent(credText(S.cred)) + '">Email</a><button class="btn sm ghost" data-creddone>Done</button></div></div>' : '';
+    const cred = S.cred ? '<div class="cred"><b>' + esc(S.cred.msg) + '</b><pre>' + esc(credText(S.cred)) + '</pre><p class="sub">Shown only now. Share it privately.</p><div class="acts"><button class="btn sm" data-credcopy>Copy</button><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(credText(S.cred)) + '">Send on WhatsApp</a><a class="btn sm ghost" href="mailto:' + encodeURIComponent(S.cred.email) + '?subject=' + encodeURIComponent('Your Genius Coffee Bar admin login') + '&body=' + encodeURIComponent(credText(S.cred)) + '">Email</a><button class="btn sm ghost" data-creddone>Done</button></div></div>' : '';
     return '<div class="card wide"><h3>Team &amp; permissions</h3><p class="sub" style="margin-bottom:12px">Create a login for each person and choose exactly what they can do. Owners can do everything.</p>' + cred +
       S.team.map(m => {
         const self = m.email.toLowerCase() === me, own = m.role === 'owner';
@@ -421,16 +422,16 @@
   async function submitForm(f) {
     const n = f.dataset.form, d = new FormData(f), btn = f.querySelector('[type=submit]'); btn.disabled = true;
     try {
-      if (n === 'announcement') { if (await saveSetting('announcement', { on: d.has('on'), text: String(d.get('text') || '').trim() })) toast('Banner saved ✓'); }
+      if (n === 'announcement') { if (await saveSetting('announcement', { on: d.has('on'), text: String(d.get('text') || '').trim() })) toast('Banner saved'); }
       else if (n === 'hours') {
         const v = { open: +d.get('open'), close_sun_wed: +d.get('close_sun_wed'), close_thu_sat: +d.get('close_thu_sat'), temp_closed: d.has('temp_closed') };
-        if (await saveSetting('hours', v)) toast('Hours saved ✓');
+        if (await saveSetting('hours', v)) toast('Hours saved');
       } else if (n === 'rating') {
         const score = String(d.get('score')).trim().replace(',', '.'), count = parseInt(d.get('count'), 10), u = String(d.get('url') || '').trim();
         if (!(Number(score) >= 1 && Number(score) <= 5)) { toast('Stars must be between 1 and 5', true); }
         else if (!(count >= 0)) { toast('Enter the number of reviews', true); }
         else if (u && !/^https:\/\//i.test(u)) { toast('The link must start with https://', true); }
-        else if (await saveSetting('rating', { score, count, url: u })) toast('Rating saved ✓');
+        else if (await saveSetting('rating', { score, count, url: u })) toast('Rating saved');
       } else if (n === 'teamnew') {
         const em = String(d.get('email') || '').trim().toLowerCase(), pw = String(d.get('password') || ''), rl = d.get('role');
         const role = rl === 'owner' ? 'owner' : 'staff', perms = role === 'owner' ? ALLP : d.getAll('perm');
@@ -440,14 +441,14 @@
         else {
           const r = await db.rpc('admin_create_user', { p_email: em, p_password: pw, p_role: role, p_perms: perms });
           if (r.error) toast(/function .*admin_create_user/.test(r.error.message) ? 'Run supabase/003_user_management.sql first' : r.error.message, true);
-          else { S.cred = { email: em, password: pw, msg: 'User created' }; await loadTeam(); renderPage(); toast('User created ✓'); }
+          else { S.cred = { email: em, password: pw, msg: 'User created' }; await loadTeam(); renderPage(); toast('User created'); }
         }
       } else if (n === 'teamsave') {
         const em = f.dataset.email, perms = d.getAll('perm');
-        const r = await db.from('admins').update({ perms }).eq('email', em); toast(r.error ? r.error.message : 'Permissions saved ✓', !!r.error); if (!r.error) await loadTeam();
+        const r = await db.from('admins').update({ perms }).eq('email', em); toast(r.error ? r.error.message : 'Permissions saved', !!r.error); if (!r.error) await loadTeam();
       } else if (n === 'password') {
         const pw = String(d.get('pw') || ''); if (pw.length < 8) { toast('Use at least 8 characters', true); }
-        else { const r = await db.auth.updateUser({ password: pw }); toast(r.error ? r.error.message : 'Password changed ✓', !!r.error); if (!r.error) f.reset(); }
+        else { const r = await db.auth.updateUser({ password: pw }); toast(r.error ? r.error.message : 'Password changed', !!r.error); if (!r.error) f.reset(); }
       }
     } finally { btn.disabled = false; }
   }
@@ -498,14 +499,14 @@
       await mut(db.from('menu_items').update({ sold_out: v }).eq('group_id', g.id), v ? 'Section marked sold out' : 'Section back in stock'); return;
     }
     if (g && 'gdel' in b.dataset) {
-      if (!confirm('Delete the section “' + g.title + '” and all its items? This cannot be undone.')) return;
+      if (!confirm('Delete the section "' + g.title + '" and all its items? This cannot be undone.')) return;
       if (await mut(db.from('menu_groups').delete().eq('id', g.id), 'Section deleted')) { S.groups = S.groups.filter(x => x.id !== g.id); S.items = S.items.filter(i => i.group_id !== g.id); renderPage(); }
       return;
     }
     if (g && 'additem' in b.dataset) {
       const its = iOf(g.id), r = await db.from('menu_items').insert({ group_id: g.id, name: 'New item', hot: 0, iced: null, sort: its.length ? Math.max(...its.map(i => i.sort)) + 1 : 0 }).select().single();
       if (r.error) { toast('Could not add: ' + r.error.message, true); return; }
-      S.items.push(r.data); renderPage(); toast('Item added — set its name and price');
+      S.items.push(r.data); renderPage(); toast('Item added. Set its name and price');
       const inp = document.querySelector('[data-iid="' + r.data.id + '"] [data-iname]'); if (inp) { inp.focus(); inp.select(); }
       return;
     }
@@ -514,10 +515,10 @@
     if (it && 'idup' in b.dataset) {
       const list = iOf(it.group_id), r = await db.from('menu_items').insert({ group_id: it.group_id, name: it.name + ' copy', hot: it.hot, iced: it.iced, sort: Math.max(...list.map(x => x.sort)) + 1 }).select().single();
       if (r.error) { toast('Could not duplicate: ' + r.error.message, true); return; }
-      S.items.push(r.data); renderPage(); toast('Duplicated — rename it'); return;
+      S.items.push(r.data); renderPage(); toast('Duplicated. Rename it'); return;
     }
     if (it && 'idel' in b.dataset) {
-      if (!confirm('Delete “' + it.name + '”?')) return;
+      if (!confirm('Delete "' + it.name + '"?')) return;
       if (await mut(db.from('menu_items').delete().eq('id', it.id), 'Item deleted')) { S.items = S.items.filter(x => x.id !== it.id); renderPage(); }
       return;
     }
@@ -535,7 +536,7 @@
     if (t.matches('[data-pfile]')) { const c = $(t, '[data-slot]'), f = t.files[0]; if (c && f) uploadPhoto(c.dataset.slot, f); t.value = ''; return; }
     if (g && t.matches('[data-gtitle]')) {
       const v = t.value.trim(); if (!v) { t.value = g.title; toast('Name cannot be empty', true); return; }
-      if (v === g.title) return; g.title = v; await mut(db.from('menu_groups').update({ title: v }).eq('id', g.id), 'Saved ✓'); return;
+      if (v === g.title) return; g.title = v; await mut(db.from('menu_groups').update({ title: v }).eq('id', g.id), 'Saved'); return;
     }
     if (g && !it && t.matches('[data-gdual]')) {
       g.dual = t.checked; renderPage();
@@ -543,13 +544,13 @@
     }
     if (it && t.matches('[data-iname]')) {
       const v = t.value.trim(); if (!v) { t.value = it.name; toast('Name cannot be empty', true); return; }
-      if (v === it.name) return; it.name = v; await mut(db.from('menu_items').update({ name: v }).eq('id', it.id), 'Saved ✓'); return;
+      if (v === it.name) return; it.name = v; await mut(db.from('menu_items').update({ name: v }).eq('id', it.id), 'Saved'); return;
     }
     if (it && t.matches('[data-iprice]')) {
       const f = t.dataset.iprice, grp = S.groups.find(x => x.id === it.group_id);
       const v = parsePrice(t.value, f === 'iced' || (grp && grp.dual));
       if (v === undefined) { t.value = pv(it[f]); toast('Enter a price like 1.5', true); return; }
-      it[f] = v; t.value = pv(v); await mut(db.from('menu_items').update({ [f]: v }).eq('id', it.id), 'Saved ✓'); return;
+      it[f] = v; t.value = pv(v); await mut(db.from('menu_items').update({ [f]: v }).eq('id', it.id), 'Saved'); return;
     }
     if (it && t.matches('[data-isold]')) { it.sold_out = t.checked; await mut(can('menu') ? db.from('menu_items').update({ sold_out: it.sold_out }).eq('id', it.id) : db.rpc('set_sold_out', { p_id: it.id, p_val: it.sold_out }), it.sold_out ? 'Marked sold out' : 'Back on the menu'); return; }
     if (it && t.matches('[data-ihide]')) { it.hidden = t.checked; ic.classList.toggle('hid', it.hidden); await mut(db.from('menu_items').update({ hidden: it.hidden }).eq('id', it.id), it.hidden ? 'Hidden from website' : 'Visible again'); return; }
