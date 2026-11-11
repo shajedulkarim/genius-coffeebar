@@ -127,7 +127,7 @@
     const n = document.getElementById('nav'); if (!n) return;
     const nc = newCount();
     n.innerHTML = [['orders', 'Orders'], ['menu', 'Menu'], ['photos', 'Photos'], ['settings', 'Settings']].map(([k, l]) =>
-      '<button data-go="' + k + '" class="' + (S.tab === k ? 'on' : '') + '" aria-label="' + l + '">' + ICON[k] + l + (k === 'orders' && nc ? '<span class="badge">' + nc + '</span>' : '') + '</button>').join('');
+      '<button data-go="' + k + '" class="' + (S.tab === k ? 'on' : '') + '" aria-label="' + l + '">' + ICON[k] + l + (k === 'orders' && nc ? '<span class="badge">' + nc + '</span>' : '') + '</button>').join('') + '<a class="site" href="../" target="_blank" rel="noopener">View website ↗</a>';
     document.title = (nc ? '(' + nc + ') ' : '') + 'Genius Admin';
   }
   function renderPage() {
