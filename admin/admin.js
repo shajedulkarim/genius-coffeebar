@@ -40,7 +40,7 @@
   }
 
   const db = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-  const S = { user: null, tab: 'orders', menuTab: 'coffee', groups: [], items: [], settings: {}, orders: [], ordersFilter: 'active', osearch: '', msearch: '', range: 7, busy: {}, role: 'owner', team: [], maxSeen: 0, polling: null, recovery: false };
+  const S = { user: null, tab: 'orders', menuTab: 'coffee', groups: [], items: [], settings: {}, orders: [], ordersFilter: 'active', osearch: '', msearch: '', range: 7, busy: {}, role: 'owner', perms: [], cred: null, team: [], maxSeen: 0, polling: null, recovery: false };
 
   // ---------- data ----------
   async function loadMenu() {
@@ -49,6 +49,7 @@
     S.groups = g.data; S.items = i.data; S.settings = {}; s.data.forEach(x => S.settings[x.key] = x.value);
   }
   async function loadOrders(quiet) {
+    if (!(can('orders') || can('insights'))) return;
     const r = await db.from('orders').select('*').order('created_at', { ascending: false }).limit(500);
     if (r.error) { if (!quiet) toast('Could not load orders', true); return; }
     const fresh = r.data.filter(o => o.id > S.maxSeen && o.status === 'new');
@@ -74,6 +75,11 @@
     if (!r.error) S.team = r.data;
   }
   const isOwner = () => S.role === 'owner';
+  const ALLP = ['orders', 'availability', 'menu', 'insights', 'photos', 'settings'];
+  const can = p => isOwner() || S.perms.includes(p);
+  const PERMS = [['orders', 'Orders', 'see and update orders'], ['availability', 'Availability', 'sold-out switches'], ['menu', 'Menu', 'edit items, prices, sections'], ['insights', 'Insights', 'sales reports'], ['photos', 'Photos', 'replace website photos'], ['settings', 'Settings', 'banner, hours, rating']];
+  const PRESETS = { staff: ['orders', 'availability'], manager: ALLP.slice(), owner: ALLP.slice() };
+  const genPw = () => { const c = 'abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRTUVWXYZ2346789', a = new Uint32Array(10); crypto.getRandomValues(a); return Array.from(a, x => c[x % c.length]).join(''); };
   async function saveSetting(key, value) {
     const r = await db.from('settings').upsert({ key, value, updated_at: new Date().toISOString() });
     if (r.error) { toast('Could not save: ' + r.error.message, true); return false; }
@@ -98,7 +104,9 @@
     }
     S.user = user;
     const rr = await db.rpc('my_role'); S.role = rr.error || !rr.data ? 'owner' : rr.data;
-    try { await loadMenu(); await loadOrders(true); if (S.role === 'owner') await loadTeam(); } catch (e) { show(); renderLogin('Could not load data: ' + (e.message || e)); return; }
+    const pr = await db.rpc('my_perms');
+    S.perms = !pr.error && Array.isArray(pr.data) ? pr.data : (S.role === 'owner' ? ALLP.slice() : ['orders', 'availability']);
+    try { await loadMenu(); if (can('orders') || can('insights')) await loadOrders(true); if (isOwner()) await loadTeam(); } catch (e) { show(); renderLogin('Could not load data: ' + (e.message || e)); return; }
     S.tab = S.recovery ? 'settings' : 'orders';
     show(); renderShell(); startPoll();
   }
@@ -108,21 +116,13 @@
       '<label class="f"><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>' +
       (msg ? '<p class="err">' + esc(msg) + '</p>' : '<p class="err" id="lerr" hidden></p>') +
       '<button class="btn block" type="submit">Sign in</button>' +
-      '<p style="text-align:center;margin-top:12px"><button type="button" class="btn ghost sm" id="forgot">Forgot password</button> <button type="button" class="btn ghost sm" id="signup">New staff? Create account</button></p><p class="sub" style="text-align:center;margin-top:6px">Staff accounts must first be added by the owner (Settings → Team).</p></div></form>';
+      '<p style="text-align:center;margin-top:12px"><button type="button" class="btn ghost sm" id="forgot">Forgot password</button> </p><p class="sub" style="text-align:center;margin-top:6px">No account? Ask the owner to create one for you.</p></div></form>';
     const f = document.getElementById('loginForm');
     f.addEventListener('submit', async e => {
       e.preventDefault(); const b = f.querySelector('.btn'); b.disabled = true;
       const r = await db.auth.signInWithPassword({ email: f.email.value.trim(), password: f.password.value });
       if (r.error) { b.disabled = false; renderLogin(r.error.message === 'Invalid login credentials' ? 'Wrong email or password.' : r.error.message); return; }
       await enter(r.data.user);
-    });
-    document.getElementById('signup').addEventListener('click', async () => {
-      const em = f.email.value.trim(), pw = f.password.value;
-      if (!em || pw.length < 8) { toast('Type your email and choose a password (8+ characters), then tap again', true); return; }
-      const r = await db.auth.signUp({ email: em, password: pw });
-      if (r.error) { toast(r.error.message, true); return; }
-      if (r.data.session) { await enter(r.data.session.user); return; }
-      toast('Account created. Confirm the email we sent, then sign in.');
     });
     document.getElementById('forgot').addEventListener('click', async () => {
       const em = f.email.value.trim(); if (!em) { toast('Type your email first', true); return; }
@@ -142,8 +142,9 @@
   function renderNav() {
     const n = document.getElementById('nav'); if (!n) return;
     const nc = newCount();
-    if (!isOwner() && !['orders', 'menu', 'settings'].includes(S.tab)) S.tab = 'orders';
-    n.innerHTML = (isOwner() ? [['orders', 'Orders'], ['menu', 'Menu'], ['insights', 'Insights'], ['photos', 'Photos'], ['settings', 'Settings']] : [['orders', 'Orders'], ['menu', 'Availability'], ['settings', 'Settings']]).map(([k, l]) =>
+    const tabs = [['orders', 'Orders', can('orders')], ['menu', can('menu') ? 'Menu' : 'Availability', can('menu') || can('availability')], ['insights', 'Insights', can('insights')], ['photos', 'Photos', can('photos')], ['settings', 'Settings', true]].filter(t => t[2]);
+    if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
+    n.innerHTML = tabs.map(([k, l]) =>
       '<button data-go="' + k + '" class="' + (S.tab === k ? 'on' : '') + '" aria-label="' + l + '">' + ICON[k] + l + (k === 'orders' && nc ? '<span class="badge">' + nc + '</span>' : '') + '</button>').join('') + '<a class="site" href="../" target="_blank" rel="noopener">View website ↗</a><div class="who"><b>' + esc(S.user && S.user.email) + '</b><span>' + (isOwner() ? 'Owner' : 'Staff') + '</span></div><button class="out" data-signout>Sign out</button>';
     document.title = (nc ? '(' + nc + ') ' : '') + 'Genius Admin';
   }
@@ -256,7 +257,7 @@
       '<div class="it av' + (it.hidden ? ' hid' : '') + '" data-iid="' + it.id + '"><div class="it-1"><span class="grow">' + esc(it.name) + (it.hidden ? ' <small class="sub">(hidden)</small>' : '') + '</span><label class="sw warn"><input type="checkbox" data-isold' + (it.sold_out ? ' checked' : '') + '><s></s>Sold out</label></div></div>').join('') + '</section>';
   }
   function pageMenu() {
-    if (!isOwner()) return '<h2 class="h2">Availability</h2><p class="sub" style="margin-bottom:12px">Switch “Sold out” on when something runs out. The website updates within seconds.</p><div class="search"><input type="search" placeholder="Search items…" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div><div class="dc" id="mlist">' + menuList() + '</div>';
+    if (!can('menu')) return '<h2 class="h2">Availability</h2><p class="sub" style="margin-bottom:12px">Switch “Sold out” on when something runs out. The website updates within seconds.</p><div class="search"><input type="search" placeholder="Search items…" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div><div class="dc" id="mlist">' + menuList() + '</div>';
     const gs = gOf(S.menuTab);
     const chips = '<div class="chips">' + TABS.map(([k, l]) => '<button class="chip ' + (S.menuTab === k ? 'on' : '') + '" data-mtab="' + k + '">' + l + '<i>' + S.groups.filter(g => g.tab === k).length + '</i></button>').join('') + '</div>';
     if (!S.groups.length) {
@@ -272,9 +273,9 @@
     const q = S.msearch.trim().toLowerCase();
     if (!q) {
       const chips = '<div class="chips">' + TABS.map(([k, l]) => '<button class="chip ' + (S.menuTab === k ? 'on' : '') + '" data-mtab="' + k + '">' + l + '<i>' + S.groups.filter(g => g.tab === k).length + '</i></button>').join('') + '</div>';
-      const gs = gOf(S.menuTab); return chips + (gs.length ? gs.map(g => isOwner() ? groupCard(g) : availCard(g)).join('') : '<div class="empty">No sections in this tab yet.</div>');
+      const gs = gOf(S.menuTab); return chips + (gs.length ? gs.map(g => can('menu') ? groupCard(g) : availCard(g)).join('') : '<div class="empty">No sections in this tab yet.</div>');
     }
-    const out = TABS.flatMap(([k]) => gOf(k)).filter(g => iOf(g.id).some(i => i.name.toLowerCase().includes(q))).map(g => isOwner() ? groupCard(g, q) : availCard(g, q));
+    const out = TABS.flatMap(([k]) => gOf(k)).filter(g => iOf(g.id).some(i => i.name.toLowerCase().includes(q))).map(g => can('menu') ? groupCard(g, q) : availCard(g, q));
     return out.length ? out.join('') : '<div class="empty">No items match “' + esc(S.msearch) + '”.</div>';
   }
   function groupCard(g, q) {
@@ -380,7 +381,7 @@
     const opts = (from, to, sel) => { let o = ''; for (let x = from; x <= to; x++) o += '<option value="' + x + '"' + (x === sel ? ' selected' : '') + '>' + (x === 24 ? '12 am (midnight)' : hr(x)) + '</option>'; return o; };
     const acct = '<form class="card" data-form="password"><h3>Account</h3><p class="sub" style="margin-bottom:10px">Signed in as <b>' + esc(S.user && S.user.email) + '</b> · ' + (isOwner() ? 'Owner' : 'Staff') + '</p><label class="f"><span>New password (min 8 characters)</span><input type="password" name="pw" autocomplete="new-password" minlength="8"></label><button class="btn block" type="submit">Change password</button></form>';
     const alerts = '<div class="card"><h3>Order alerts</h3><label class="sw"><input type="checkbox" data-sound' + (localStorage.getItem('genius-mute') === '1' ? '' : ' checked') + '><s></s>Beep when a new order arrives (this device)</label><button class="btn ghost sm" data-testsound style="margin-top:8px">Test sound</button></div>';
-    if (!isOwner()) return '<h2 class="h2">Settings</h2>' + acct + alerts + '<button class="btn danger block" data-signout>Sign out</button>';
+    if (!can('settings')) return '<h2 class="h2">Settings</h2>' + acct + alerts + '<button class="btn danger block" data-signout>Sign out</button>';
     return '<h2 class="h2">Settings</h2>' +
       '<form class="card" data-form="announcement"><h3>Announcement banner</h3><p class="sub" style="margin-bottom:10px">A bar across the top of the website, for example “Closed for Eid — back Friday”.</p>' +
       '<label class="sw"><input type="checkbox" name="on"' + (a.on ? ' checked' : '') + '><s></s>Show banner</label><label class="f"><span>Message</span><input type="text" name="text" maxlength="140" value="' + esc(a.text) + '" placeholder="Short message"></label><button class="btn block" type="submit">Save banner</button></form>' +
@@ -390,16 +391,27 @@
       '<label class="f"><span>Link to your Google reviews</span><input type="text" name="url" value="' + esc(r.url) + '" placeholder="https://…"></label><button class="btn block" type="submit">Save rating</button></form>' +
       '<form class="card" data-form="password"><h3>Account</h3><p class="sub" style="margin-bottom:10px">Signed in as <b>' + esc(S.user && S.user.email) + '</b></p><label class="f"><span>New password (min 8 characters)</span><input type="password" name="pw" autocomplete="new-password" minlength="8"></label><button class="btn block" type="submit">Change password</button></form>' +
       '<div class="card"><h3>Order alerts</h3><label class="sw"><input type="checkbox" data-sound' + (localStorage.getItem('genius-mute') === '1' ? '' : ' checked') + '><s></s>Beep when a new order arrives (this device)</label><button class="btn ghost sm" data-testsound style="margin-top:8px">Test sound</button></div>' +
-      teamCard() +
-      '<div class="card"><h3>Backup</h3><p class="sub" style="margin-bottom:10px">Download a copy of your whole menu and settings as a file. Keep it somewhere safe.</p><button class="btn ghost block" data-backup>↓ Download backup</button></div>' +
+      (isOwner() ? teamCard() : '') +
+      (!can('menu') ? '' : '<div class="card"><h3>Backup</h3><p class="sub" style="margin-bottom:10px">Download a copy of your whole menu and settings as a file. Keep it somewhere safe.</p><button class="btn ghost block" data-backup>↓ Download backup</button></div>') +
       '<button class="btn danger block" data-signout>Sign out</button>';
   }
+  const permBoxes = (sel, dis) => '<div class="perms">' + PERMS.map(([k, l, d]) => '<label class="sw"><input type="checkbox" name="perm" value="' + k + '"' + (sel.includes(k) ? ' checked' : '') + (dis ? ' disabled' : '') + '><s></s><span><b>' + l + '</b> <small>' + d + '</small></span></label>').join('') + '</div>';
+  const adminUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
+  function credText(c) { return 'Genius Coffee Bar admin\nLink: ' + adminUrl() + '\nEmail: ' + c.email + '\nPassword: ' + c.password + '\n(You can change the password in Settings after signing in.)'; }
   function teamCard() {
     const me = (S.user && S.user.email || '').toLowerCase();
-    return '<div class="card wide"><h3>Team</h3><p class="sub" style="margin-bottom:10px"><b>Owner</b>: full access. <b>Staff</b>: orders and sold-out switches only. A new staff member opens the admin page, taps “Create account” with the email you add here, and signs in.</p>' +
-      (S.team.length ? S.team.map(m => '<div class="tm" data-email="' + esc(m.email) + '"><div class="grow"><b>' + esc(m.email) + '</b>' + (m.email.toLowerCase() === me ? ' <small class="sub">(you)</small>' : '') + '</div>' +
-        (m.email.toLowerCase() === me ? '<span class="tag">' + m.role + '</span>' : '<select data-teamrole aria-label="Role"><option value="staff"' + (m.role === 'staff' ? ' selected' : '') + '>Staff</option><option value="owner"' + (m.role === 'owner' ? ' selected' : '') + '>Owner</option></select><button class="iconb del" data-teamdel aria-label="Remove">' + ICON.trash + '</button>') + '</div>').join('') : '<p class="sub">No team data. Run supabase/002_staff_and_phone.sql first.</p>') +
-      '<form data-form="teamadd" class="tm-add"><label class="f grow"><span>Add by email</span><input type="email" name="email" required placeholder="barista@example.com" inputmode="email"></label><label class="f"><span>Role</span><select name="role"><option value="staff">Staff</option><option value="owner">Owner</option></select></label><button class="btn" type="submit">Add</button></form></div>';
+    const cred = S.cred ? '<div class="cred"><b>✅ ' + esc(S.cred.msg) + '</b><pre>' + esc(credText(S.cred)) + '</pre><p class="sub">Shown only now. Share it privately.</p><div class="acts"><button class="btn sm" data-credcopy>Copy</button><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(credText(S.cred)) + '">Send on WhatsApp</a><a class="btn sm ghost" href="mailto:' + encodeURIComponent(S.cred.email) + '?subject=' + encodeURIComponent('Your Genius Coffee Bar admin login') + '&body=' + encodeURIComponent(credText(S.cred)) + '">Email</a><button class="btn sm ghost" data-creddone>Done</button></div></div>' : '';
+    return '<div class="card wide"><h3>Team &amp; permissions</h3><p class="sub" style="margin-bottom:12px">Create a login for each person and choose exactly what they can do. Owners can do everything.</p>' + cred +
+      S.team.map(m => {
+        const self = m.email.toLowerCase() === me, own = m.role === 'owner';
+        return '<form class="tm" data-form="teamsave" data-email="' + esc(m.email) + '"><div class="tm-h"><div class="grow"><b>' + esc(m.email) + '</b>' + (self ? ' <small class="sub">(you)</small>' : '') + '</div><span class="tag ' + (own ? 'ready' : '') + '">' + (own ? 'Owner' : 'Staff') + '</span></div>' +
+          (own ? '<p class="sub">Full access to everything.</p>' : permBoxes(m.perms || [])) +
+          (self ? '<p class="sub">Use Account below to change your own password.</p>' : '<div class="acts">' + (own ? '' : '<button class="btn sm" type="submit">Save permissions</button>') + '<button class="btn sm ghost" type="button" data-teamreset>New password</button><button class="btn sm ghost" type="button" data-teamrole>' + (own ? 'Make staff' : 'Make owner') + '</button><button class="btn sm danger" type="button" data-teamdel>Remove</button></div>') + '</form>';
+      }).join('') +
+      '<form class="tm tm-new" data-form="teamnew"><h3>Create a new user</h3><label class="f"><span>Email (their login)</span><input type="email" name="email" required placeholder="barista@example.com" inputmode="email" autocapitalize="off"></label>' +
+      '<label class="f"><span>Password (8+ characters)</span><div class="row"><input type="text" name="password" required minlength="8" value="' + genPw() + '" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="btn ghost sm" data-genpw>New</button></div></label>' +
+      '<label class="f"><span>Role</span><select name="role" data-rolepreset><option value="staff">Staff (orders + sold-out)</option><option value="manager">Manager (everything except team)</option><option value="owner">Owner (full access, can manage team)</option></select></label>' +
+      '<div class="sub" style="margin-bottom:6px">Permissions</div>' + permBoxes(PRESETS.staff) + '<button class="btn block" type="submit">Create user</button></form></div>';
   }
   function downloadBackup() {
     const data = { app: 'genius-admin', saved: new Date().toISOString(), menu_groups: S.groups, menu_items: S.items, settings: S.settings };
@@ -419,10 +431,20 @@
         else if (!(count >= 0)) { toast('Enter the number of reviews', true); }
         else if (u && !/^https:\/\//i.test(u)) { toast('The link must start with https://', true); }
         else if (await saveSetting('rating', { score, count, url: u })) toast('Rating saved ✓');
-      } else if (n === 'teamadd') {
-        const em = String(d.get('email') || '').trim().toLowerCase(), role = d.get('role') === 'owner' ? 'owner' : 'staff';
+      } else if (n === 'teamnew') {
+        const em = String(d.get('email') || '').trim().toLowerCase(), pw = String(d.get('password') || ''), rl = d.get('role');
+        const role = rl === 'owner' ? 'owner' : 'staff', perms = role === 'owner' ? ALLP : d.getAll('perm');
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) toast('Enter a valid email', true);
-        else { const r = await db.from('admins').upsert({ email: em, role }); if (r.error) toast('Could not add: ' + r.error.message, true); else { await loadTeam(); renderPage(); toast(em + ' added as ' + role); } }
+        else if (pw.length < 8) toast('Password needs 8+ characters', true);
+        else if (role === 'staff' && !perms.length) toast('Tick at least one permission', true);
+        else {
+          const r = await db.rpc('admin_create_user', { p_email: em, p_password: pw, p_role: role, p_perms: perms });
+          if (r.error) toast(/function .*admin_create_user/.test(r.error.message) ? 'Run supabase/003_user_management.sql first' : r.error.message, true);
+          else { S.cred = { email: em, password: pw, msg: 'User created' }; await loadTeam(); renderPage(); toast('User created ✓'); }
+        }
+      } else if (n === 'teamsave') {
+        const em = f.dataset.email, perms = d.getAll('perm');
+        const r = await db.from('admins').update({ perms }).eq('email', em); toast(r.error ? r.error.message : 'Permissions saved ✓', !!r.error); if (!r.error) await loadTeam();
       } else if (n === 'password') {
         const pw = String(d.get('pw') || ''); if (pw.length < 8) { toast('Use at least 8 characters', true); }
         else { const r = await db.auth.updateUser({ password: pw }); toast(r.error ? r.error.message : 'Password changed ✓', !!r.error); if (!r.error) f.reset(); }
@@ -435,10 +457,24 @@
   document.addEventListener('click', async e => {
     const t = e.target, b = t.closest('button'); if (!b || !S.user) return;
     if ('teamdel' in b.dataset) {
-      const em = $(b, '[data-email]').dataset.email; if (!confirm('Remove ' + em + '? They will no longer be able to use the admin.')) return;
-      const r = await db.from('admins').delete().eq('email', em); if (r.error) toast(r.error.message, true); else { await loadTeam(); renderPage(); toast('Removed'); } return;
+      const em = $(b, '[data-email]').dataset.email; if (!confirm('Delete ' + em + '? Their login is removed and they can no longer sign in.')) return;
+      const r = await db.rpc('admin_remove_user', { p_email: em }); if (r.error) toast(r.error.message, true); else { await loadTeam(); renderPage(); toast('User removed'); } return;
     }
-    if (b.dataset.go) { S.tab = b.dataset.go; renderPage(); window.scrollTo(0, 0); return; }
+    if ('teamreset' in b.dataset) {
+      const em = $(b, '[data-email]').dataset.email; if (!confirm('Set a new password for ' + em + '? Their old password stops working.')) return;
+      const pw = genPw(), r = await db.rpc('admin_set_password', { p_email: em, p_password: pw });
+      if (r.error) toast(r.error.message, true); else { S.cred = { email: em, password: pw, msg: 'New password set' }; renderPage(); const cd = document.querySelector('.cred'); if (cd) cd.scrollIntoView({ block: 'center' }); } return;
+    }
+    if ('teamrole' in b.dataset) {
+      const c = $(b, '[data-email]'), em = c.dataset.email, m = S.team.find(x => x.email === em), toOwner = m && m.role !== 'owner';
+      if (!confirm(toOwner ? 'Give ' + em + ' FULL owner access (menu, prices, photos, team)?' : 'Make ' + em + ' staff? Choose their permissions afterwards.')) return;
+      const r = await db.from('admins').update(toOwner ? { role: 'owner', perms: ALLP } : { role: 'staff', perms: PRESETS.staff }).eq('email', em);
+      toast(r.error ? r.error.message : 'Role updated', !!r.error); await loadTeam(); renderPage(); return;
+    }
+    if ('genpw' in b.dataset) { const i = b.closest('form').querySelector('[name=password]'); i.value = genPw(); return; }
+    if ('credcopy' in b.dataset) { try { await navigator.clipboard.writeText(credText(S.cred)); toast('Copied'); } catch (er) { toast('Select and copy the text manually', true); } return; }
+    if ('creddone' in b.dataset) { S.cred = null; renderPage(); return; }
+    if (b.dataset.go)    if (b.dataset.go) { if (b.dataset.go !== 'settings') S.cred = null; S.tab = b.dataset.go; renderPage(); window.scrollTo(0, 0); return; }
     if ('csv' in b.dataset) { exportCsv(); return; }
     if ('backup' in b.dataset) { downloadBackup(); return; }
     if ('testsound' in b.dataset) { const m = localStorage.getItem('genius-mute'); localStorage.removeItem('genius-mute'); notify(1); if (m) localStorage.setItem('genius-mute', m); return; }
@@ -492,9 +528,8 @@
     const t = e.target; if (!S.user) return;
     const gc = $(t, '[data-gid]'), g = gc && S.groups.find(x => x.id === gc.dataset.gid);
     const ic = $(t, '[data-iid]'), it = ic && S.items.find(x => x.id === ic.dataset.iid);
-    if (t.matches('[data-teamrole]')) {
-      const em = $(t, '[data-email]').dataset.email; if (t.value === 'owner' && !confirm('Give ' + em + ' full owner access (menu, prices, photos, team)?')) { await loadTeam(); renderPage(); return; }
-      const r = await db.from('admins').update({ role: t.value }).eq('email', em); toast(r.error ? r.error.message : 'Role updated', !!r.error); await loadTeam(); renderPage(); return;
+    if (t.matches('[data-rolepreset]')) {
+      const f = t.closest('form'), sel = PRESETS[t.value] || []; f.querySelectorAll('[name=perm]').forEach(x => { x.checked = sel.includes(x.value); x.disabled = t.value === 'owner'; }); return;
     }
     if (t.matches('[data-sound]')) { if (t.checked) localStorage.removeItem('genius-mute'); else localStorage.setItem('genius-mute', '1'); toast(t.checked ? 'Sound on' : 'Sound off'); return; }
     if (t.matches('[data-pfile]')) { const c = $(t, '[data-slot]'), f = t.files[0]; if (c && f) uploadPhoto(c.dataset.slot, f); t.value = ''; return; }
@@ -516,7 +551,7 @@
       if (v === undefined) { t.value = pv(it[f]); toast('Enter a price like 1.5', true); return; }
       it[f] = v; t.value = pv(v); await mut(db.from('menu_items').update({ [f]: v }).eq('id', it.id), 'Saved ✓'); return;
     }
-    if (it && t.matches('[data-isold]')) { it.sold_out = t.checked; await mut(isOwner() ? db.from('menu_items').update({ sold_out: it.sold_out }).eq('id', it.id) : db.rpc('set_sold_out', { p_id: it.id, p_val: it.sold_out }), it.sold_out ? 'Marked sold out' : 'Back on the menu'); return; }
+    if (it && t.matches('[data-isold]')) { it.sold_out = t.checked; await mut(can('menu') ? db.from('menu_items').update({ sold_out: it.sold_out }).eq('id', it.id) : db.rpc('set_sold_out', { p_id: it.id, p_val: it.sold_out }), it.sold_out ? 'Marked sold out' : 'Back on the menu'); return; }
     if (it && t.matches('[data-ihide]')) { it.hidden = t.checked; ic.classList.toggle('hid', it.hidden); await mut(db.from('menu_items').update({ hidden: it.hidden }).eq('id', it.id), it.hidden ? 'Hidden from website' : 'Visible again'); return; }
   });
 
