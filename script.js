@@ -163,7 +163,7 @@ document.getElementById('yr').textContent = new Date().getFullYear();
   $('sendWA').addEventListener('click', () => {
     if (!cart.length || !window.GeniusCMS) return;
     window.GeniusCMS.logOrder({
-      name: $('oName').value.trim(), pickup: $('oWhen').value, note: $('oNote').value.trim(), total: total() / 1000,
+      name: $('oName').value.trim(), phone: $('oPhone').value.trim(), pickup: $('oWhen').value, note: $('oNote').value.trim(), total: total() / 1000,
       items: cart.map(i => ({ n: i.n, v: i.v, q: i.q, p: i.p / 1000 }))
     });
   });

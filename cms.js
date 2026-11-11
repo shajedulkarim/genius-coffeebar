@@ -85,11 +85,15 @@
       const sig = JSON.stringify(o.items) + o.name + o.pickup + o.note;
       if (sig === last) return; last = sig;
       try {
-        fetch(cfg.url + '/rest/v1/orders', {
+        const send = body => fetch(cfg.url + '/rest/v1/orders', {
           method: 'POST', keepalive: true,
           headers: { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-          body: JSON.stringify({ name: o.name || null, pickup: o.pickup, note: o.note || null, items: o.items, total: o.total })
-        }).catch(() => {});
+          body: JSON.stringify(body)
+        });
+        const body = { name: o.name || null, pickup: o.pickup, note: o.note || null, items: o.items, total: o.total };
+        if (o.phone) body.phone = o.phone;
+        // if the database has no phone column yet, retry without it so the order is still logged
+        send(body).then(r => { if (!r.ok && body.phone) { delete body.phone; send(body).catch(() => {}); } }).catch(() => {});
       } catch (e) {}
     }
   };

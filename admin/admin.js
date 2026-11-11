@@ -40,7 +40,7 @@
   }
 
   const db = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-  const S = { user: null, tab: 'orders', menuTab: 'coffee', groups: [], items: [], settings: {}, orders: [], ordersFilter: 'active', osearch: '', msearch: '', range: 7, busy: {}, maxSeen: 0, polling: null, recovery: false };
+  const S = { user: null, tab: 'orders', menuTab: 'coffee', groups: [], items: [], settings: {}, orders: [], ordersFilter: 'active', osearch: '', msearch: '', range: 7, busy: {}, role: 'owner', team: [], maxSeen: 0, polling: null, recovery: false };
 
   // ---------- data ----------
   async function loadMenu() {
@@ -69,6 +69,11 @@
   }
   const newCount = () => S.orders.filter(o => o.status === 'new').length;
 
+  async function loadTeam() {
+    const r = await db.from('admins').select('*').order('email');
+    if (!r.error) S.team = r.data;
+  }
+  const isOwner = () => S.role === 'owner';
   async function saveSetting(key, value) {
     const r = await db.from('settings').upsert({ key, value, updated_at: new Date().toISOString() });
     if (r.error) { toast('Could not save: ' + r.error.message, true); return false; }
@@ -92,7 +97,8 @@
       return;
     }
     S.user = user;
-    try { await loadMenu(); await loadOrders(true); } catch (e) { show(); renderLogin('Could not load data: ' + (e.message || e)); return; }
+    const rr = await db.rpc('my_role'); S.role = rr.error || !rr.data ? 'owner' : rr.data;
+    try { await loadMenu(); await loadOrders(true); if (S.role === 'owner') await loadTeam(); } catch (e) { show(); renderLogin('Could not load data: ' + (e.message || e)); return; }
     S.tab = S.recovery ? 'settings' : 'orders';
     show(); renderShell(); startPoll();
   }
@@ -102,13 +108,21 @@
       '<label class="f"><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>' +
       (msg ? '<p class="err">' + esc(msg) + '</p>' : '<p class="err" id="lerr" hidden></p>') +
       '<button class="btn block" type="submit">Sign in</button>' +
-      '<p style="text-align:center;margin-top:12px"><button type="button" class="btn ghost sm" id="forgot">Forgot password</button></p></div></form>';
+      '<p style="text-align:center;margin-top:12px"><button type="button" class="btn ghost sm" id="forgot">Forgot password</button> <button type="button" class="btn ghost sm" id="signup">New staff? Create account</button></p><p class="sub" style="text-align:center;margin-top:6px">Staff accounts must first be added by the owner (Settings → Team).</p></div></form>';
     const f = document.getElementById('loginForm');
     f.addEventListener('submit', async e => {
       e.preventDefault(); const b = f.querySelector('.btn'); b.disabled = true;
       const r = await db.auth.signInWithPassword({ email: f.email.value.trim(), password: f.password.value });
       if (r.error) { b.disabled = false; renderLogin(r.error.message === 'Invalid login credentials' ? 'Wrong email or password.' : r.error.message); return; }
       await enter(r.data.user);
+    });
+    document.getElementById('signup').addEventListener('click', async () => {
+      const em = f.email.value.trim(), pw = f.password.value;
+      if (!em || pw.length < 8) { toast('Type your email and choose a password (8+ characters), then tap again', true); return; }
+      const r = await db.auth.signUp({ email: em, password: pw });
+      if (r.error) { toast(r.error.message, true); return; }
+      if (r.data.session) { await enter(r.data.session.user); return; }
+      toast('Account created. Confirm the email we sent, then sign in.');
     });
     document.getElementById('forgot').addEventListener('click', async () => {
       const em = f.email.value.trim(); if (!em) { toast('Type your email first', true); return; }
@@ -122,14 +136,15 @@
 
   // ---------- shell ----------
   function renderShell() {
-    $app.innerHTML = '<header class="top"><span class="logo"></span><h1>Genius Admin</h1><a href="../" target="_blank" rel="noopener">View site ↗</a></header><div class="page" id="page"></div><nav class="nav" id="nav"></nav>';
+    $app.innerHTML = '<header class="top"><span class="logo"></span><h1>Genius Admin</h1><a href="../" target="_blank" rel="noopener">View site ↗</a><button class="topout" data-signout>Sign out</button></header><div class="page" id="page"></div><nav class="nav" id="nav"></nav>';
     renderNav(); renderPage();
   }
   function renderNav() {
     const n = document.getElementById('nav'); if (!n) return;
     const nc = newCount();
-    n.innerHTML = [['orders', 'Orders'], ['menu', 'Menu'], ['insights', 'Insights'], ['photos', 'Photos'], ['settings', 'Settings']].map(([k, l]) =>
-      '<button data-go="' + k + '" class="' + (S.tab === k ? 'on' : '') + '" aria-label="' + l + '">' + ICON[k] + l + (k === 'orders' && nc ? '<span class="badge">' + nc + '</span>' : '') + '</button>').join('') + '<a class="site" href="../" target="_blank" rel="noopener">View website ↗</a>';
+    if (!isOwner() && !['orders', 'menu', 'settings'].includes(S.tab)) S.tab = 'orders';
+    n.innerHTML = (isOwner() ? [['orders', 'Orders'], ['menu', 'Menu'], ['insights', 'Insights'], ['photos', 'Photos'], ['settings', 'Settings']] : [['orders', 'Orders'], ['menu', 'Availability'], ['settings', 'Settings']]).map(([k, l]) =>
+      '<button data-go="' + k + '" class="' + (S.tab === k ? 'on' : '') + '" aria-label="' + l + '">' + ICON[k] + l + (k === 'orders' && nc ? '<span class="badge">' + nc + '</span>' : '') + '</button>').join('') + '<a class="site" href="../" target="_blank" rel="noopener">View website ↗</a><div class="who"><b>' + esc(S.user && S.user.email) + '</b><span>' + (isOwner() ? 'Owner' : 'Staff') + '</span></div><button class="out" data-signout>Sign out</button>';
     document.title = (nc ? '(' + nc + ') ' : '') + 'Genius Admin';
   }
   function renderPage() {
@@ -149,7 +164,7 @@
     if (S.ordersFilter === 'active') list = list.filter(o => ['new', 'preparing', 'ready'].includes(o.status));
     else if (S.ordersFilter === 'today') list = list.filter(o => dayKey(o.created_at) === today);
     else if (S.ordersFilter === 'done') list = list.filter(o => o.status === 'done');
-    if (q) list = list.filter(o => ('#' + o.id + ' ' + (o.name || '') + ' ' + (o.note || '') + ' ' + (o.items || []).map(i => i.n).join(' ')).toLowerCase().includes(q));
+    if (q) list = list.filter(o => ('#' + o.id + ' ' + (o.name || '') + ' ' + (o.phone || '') + ' ' + (o.note || '') + ' ' + (o.items || []).map(i => i.n).join(' ')).toLowerCase().includes(q));
     return list;
   }
   function ordersList() {
@@ -164,14 +179,14 @@
     return '<h2 class="h2">Orders</h2><div class="stats"><div class="stat"><b>' + td.length + '</b><span>Orders today</span></div><div class="stat"><b>' + omr(sum) + '</b><span>Today\'s total</span></div>' +
       '<div class="stat"><b>' + act.length + '</b><span>Active now</span></div><div class="stat"><b>' + (td.length ? omr(sum / td.length) : '—') + '</b><span>Average order</span></div></div>' +
       '<div class="chips">' + [['active', 'Active', act.length], ['today', 'Today'], ['done', 'Done'], ['all', 'All']].map(([k, l, c]) => '<button class="chip ' + (S.ordersFilter === k ? 'on' : '') + '" data-ofilter="' + k + '">' + l + (c ? '<i>' + c + '</i>' : '') + '</button>').join('') + '<button class="chip" data-refresh>↻ Refresh</button><button class="chip" data-csv>↓ Export CSV</button></div>' +
-      '<div class="search"><input type="search" placeholder="Search name, item, note or #id" value="' + esc(S.osearch) + '" data-osearch aria-label="Search orders"></div>' +
+      '<div class="search"><input type="search" placeholder="Search name, phone, item or #id" value="' + esc(S.osearch) + '" data-osearch aria-label="Search orders"></div>' +
       '<div class="dc" id="olist">' + ordersList() + '</div>' +
       '<p class="sub" style="text-align:center">Orders also arrive on WhatsApp. Here you can track their status. Last ' + S.orders.length + ' orders loaded.</p>';
   }
   function exportCsv() {
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const rows = [['Order', 'Date', 'Time', 'Name', 'Pickup', 'Status', 'Items', 'Total OMR', 'Note']].concat(filteredOrders().map(o => [
-      o.id, muscat(o.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' }), muscat(o.created_at, { hour: '2-digit', minute: '2-digit' }), o.name, o.pickup, o.status,
+    const rows = [['Order', 'Date', 'Time', 'Name', 'Phone', 'Pickup', 'Status', 'Items', 'Total OMR', 'Note']].concat(filteredOrders().map(o => [
+      o.id, muscat(o.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' }), muscat(o.created_at, { hour: '2-digit', minute: '2-digit' }), o.name, o.phone, o.pickup, o.status,
       (o.items || []).map(i => i.q + 'x ' + i.n + (i.v ? ' (' + i.v + ')' : '')).join('; '), Number(o.total).toFixed(3), o.note]));
     const blob = new Blob(['﻿' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'genius-orders-' + new Date().toISOString().slice(0, 10) + '.csv';
@@ -180,17 +195,24 @@
   function printOrder(o) {
     const w = window.open('', '_blank', 'width=380,height=640'); if (!w) { toast('Allow pop-ups to print', true); return; }
     w.document.write('<!doctype html><title>Order #' + o.id + '</title><style>body{font:14px/1.4 monospace;width:280px;margin:12px auto}h1{font-size:18px;text-align:center;margin:0}hr{border:0;border-top:1px dashed #000}.r{display:flex;justify-content:space-between;gap:8px}</style>' +
-      '<h1>GENIUS COFFEE BAR</h1><p style="text-align:center;margin:2px 0 8px">Order #' + o.id + '</p><hr><b>' + esc(o.name || 'Guest') + '</b><br>' + muscat(o.created_at, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + '<br>Pickup: ' + esc(o.pickup || '-') + '<hr>' +
+      '<h1>GENIUS COFFEE BAR</h1><p style="text-align:center;margin:2px 0 8px">Order #' + o.id + '</p><hr><b>' + esc(o.name || 'Guest') + '</b><br>' + muscat(o.created_at, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + '<br>' + (o.phone ? 'Tel: ' + esc(o.phone) + '<br>' : '') + 'Pickup: ' + esc(o.pickup || '-') + '<hr>' +
       (o.items || []).map(i => '<div class="r"><span>' + i.q + 'x ' + esc(i.n) + (i.v ? ' (' + esc(i.v) + ')' : '') + '</span><span>' + omr(i.p * i.q) + '</span></div>').join('') + '<hr><div class="r"><b>TOTAL</b><b>' + omr(o.total) + '</b></div>' + (o.note ? '<hr>Note: ' + esc(o.note) : '') + '<script>onload=function(){print()}<\/script>');
     w.document.close();
   }
+  const waNum = p => { let d = String(p || '').replace(/\D/g, ''); if (d.startsWith('00')) d = d.slice(2); if (d.length === 8) d = '968' + d; return d.length >= 9 ? d : ''; };
+  function waLink(o) {
+    const n = waNum(o.phone); if (!n) return '';
+    const who = o.name ? ' ' + o.name : '';
+    const m = o.status === 'ready' ? 'Salam' + who + ', your Genius Coffee Bar order #' + o.id + ' is ready for pickup ☕' : o.status === 'preparing' ? 'Salam' + who + ', we are preparing your order #' + o.id + ' at Genius Coffee Bar.' : 'Salam' + who + ', this is Genius Coffee Bar about your order #' + o.id + '.';
+    return 'https://wa.me/' + n + '?text=' + encodeURIComponent(m);
+  }
   function orderCard(o) {
     const nx = STATUS_NEXT[o.status];
-    return '<article class="card ord s-' + o.status + '" data-oid="' + o.id + '"><div class="ord-h"><div><b>' + esc(o.name || 'Guest') + '</b><div class="sub">' + muscat(o.created_at, { hour: '2-digit', minute: '2-digit' }) + ' · ' + ago(o.created_at) + ' · ' + esc(o.pickup || '') + '</div></div><span class="tag ' + o.status + '">' + o.status + '</span></div>' +
+    return '<article class="card ord s-' + o.status + '" data-oid="' + o.id + '"><div class="ord-h"><div><b>' + esc(o.name || 'Guest') + '</b><div class="sub">' + muscat(o.created_at, { hour: '2-digit', minute: '2-digit' }) + ' · ' + ago(o.created_at) + ' · ' + esc(o.pickup || '') + '</div>' + (o.phone ? '<div class="sub">📞 <a href="tel:' + esc(o.phone) + '">' + esc(o.phone) + '</a></div>' : '') + '</div><span class="tag ' + o.status + '">' + o.status + '</span></div>' +
       '<ul>' + (o.items || []).map(i => '<li><span>' + i.q + '× ' + esc(i.n) + (i.v ? ' <small class="sub">(' + esc(i.v) + ')</small>' : '') + '</span><span>' + omr(i.p * i.q) + '</span></li>').join('') + '</ul>' +
       '<div class="tot"><span>Total</span><span>' + omr(o.total) + '</span></div>' + (o.note ? '<div class="note">📝 ' + esc(o.note) + '</div>' : '') +
       ((nx || o.status === 'new' || o.status === 'preparing' || o.status === 'ready') ? '<div class="acts">' + (nx ? '<button class="btn grow" data-ostatus="' + nx[0] + '">' + nx[1] + '</button>' : '') +
-        (['new', 'preparing', 'ready'].includes(o.status) ? '<button class="btn danger" data-ostatus="cancelled">Cancel</button>' : '') + '</div>' : '') + '<div class="acts"><button class="btn ghost sm" data-oprint>🖨 Print</button></div>' + '</article>';
+        (['new', 'preparing', 'ready'].includes(o.status) ? '<button class="btn danger" data-ostatus="cancelled">Cancel</button>' : '') + '</div>' : '') + '<div class="acts">' + (waLink(o) ? '<a class="btn ghost sm wa" href="' + waLink(o) + '" target="_blank" rel="noopener">💬 WhatsApp customer</a>' : '') + '<button class="btn ghost sm" data-oprint>🖨 Print</button></div>' + '</article>';
   }
   async function setOrder(id, status) {
     const o = S.orders.find(x => x.id === id); if (!o) return;
@@ -228,7 +250,13 @@
   const gOf = tab => S.groups.filter(g => g.tab === tab).sort((a, b) => a.sort - b.sort);
   const iOf = gid => S.items.filter(i => i.group_id === gid).sort((a, b) => a.sort - b.sort);
   const pv = v => v == null ? '' : String(Number(v));
+  function availCard(g, q) {
+    const its = iOf(g.id).filter(i => !q || i.name.toLowerCase().includes(q));
+    return '<section class="card grp" data-gid="' + g.id + '"><div class="grp-h"><b class="gt">' + esc(g.title) + '</b></div>' + its.map(it =>
+      '<div class="it av' + (it.hidden ? ' hid' : '') + '" data-iid="' + it.id + '"><div class="it-1"><span class="grow">' + esc(it.name) + (it.hidden ? ' <small class="sub">(hidden)</small>' : '') + '</span><label class="sw warn"><input type="checkbox" data-isold' + (it.sold_out ? ' checked' : '') + '><s></s>Sold out</label></div></div>').join('') + '</section>';
+  }
   function pageMenu() {
+    if (!isOwner()) return '<h2 class="h2">Availability</h2><p class="sub" style="margin-bottom:12px">Switch “Sold out” on when something runs out. The website updates within seconds.</p><div class="search"><input type="search" placeholder="Search items…" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div><div class="dc" id="mlist">' + menuList() + '</div>';
     const gs = gOf(S.menuTab);
     const chips = '<div class="chips">' + TABS.map(([k, l]) => '<button class="chip ' + (S.menuTab === k ? 'on' : '') + '" data-mtab="' + k + '">' + l + '<i>' + S.groups.filter(g => g.tab === k).length + '</i></button>').join('') + '</div>';
     if (!S.groups.length) {
@@ -244,9 +272,9 @@
     const q = S.msearch.trim().toLowerCase();
     if (!q) {
       const chips = '<div class="chips">' + TABS.map(([k, l]) => '<button class="chip ' + (S.menuTab === k ? 'on' : '') + '" data-mtab="' + k + '">' + l + '<i>' + S.groups.filter(g => g.tab === k).length + '</i></button>').join('') + '</div>';
-      const gs = gOf(S.menuTab); return chips + (gs.length ? gs.map(g => groupCard(g)).join('') : '<div class="empty">No sections in this tab yet.</div>');
+      const gs = gOf(S.menuTab); return chips + (gs.length ? gs.map(g => isOwner() ? groupCard(g) : availCard(g)).join('') : '<div class="empty">No sections in this tab yet.</div>');
     }
-    const out = TABS.flatMap(([k]) => gOf(k)).filter(g => iOf(g.id).some(i => i.name.toLowerCase().includes(q))).map(g => groupCard(g, q));
+    const out = TABS.flatMap(([k]) => gOf(k)).filter(g => iOf(g.id).some(i => i.name.toLowerCase().includes(q))).map(g => isOwner() ? groupCard(g, q) : availCard(g, q));
     return out.length ? out.join('') : '<div class="empty">No items match “' + esc(S.msearch) + '”.</div>';
   }
   function groupCard(g, q) {
@@ -350,6 +378,9 @@
     const h = Object.assign({ open: 7, close_sun_wed: 23, close_thu_sat: 24, temp_closed: false }, S.settings.hours);
     const r = Object.assign({ score: '5.0', count: 36, url: '' }, S.settings.rating);
     const opts = (from, to, sel) => { let o = ''; for (let x = from; x <= to; x++) o += '<option value="' + x + '"' + (x === sel ? ' selected' : '') + '>' + (x === 24 ? '12 am (midnight)' : hr(x)) + '</option>'; return o; };
+    const acct = '<form class="card" data-form="password"><h3>Account</h3><p class="sub" style="margin-bottom:10px">Signed in as <b>' + esc(S.user && S.user.email) + '</b> · ' + (isOwner() ? 'Owner' : 'Staff') + '</p><label class="f"><span>New password (min 8 characters)</span><input type="password" name="pw" autocomplete="new-password" minlength="8"></label><button class="btn block" type="submit">Change password</button></form>';
+    const alerts = '<div class="card"><h3>Order alerts</h3><label class="sw"><input type="checkbox" data-sound' + (localStorage.getItem('genius-mute') === '1' ? '' : ' checked') + '><s></s>Beep when a new order arrives (this device)</label><button class="btn ghost sm" data-testsound style="margin-top:8px">Test sound</button></div>';
+    if (!isOwner()) return '<h2 class="h2">Settings</h2>' + acct + alerts + '<button class="btn danger block" data-signout>Sign out</button>';
     return '<h2 class="h2">Settings</h2>' +
       '<form class="card" data-form="announcement"><h3>Announcement banner</h3><p class="sub" style="margin-bottom:10px">A bar across the top of the website, for example “Closed for Eid — back Friday”.</p>' +
       '<label class="sw"><input type="checkbox" name="on"' + (a.on ? ' checked' : '') + '><s></s>Show banner</label><label class="f"><span>Message</span><input type="text" name="text" maxlength="140" value="' + esc(a.text) + '" placeholder="Short message"></label><button class="btn block" type="submit">Save banner</button></form>' +
@@ -359,8 +390,16 @@
       '<label class="f"><span>Link to your Google reviews</span><input type="text" name="url" value="' + esc(r.url) + '" placeholder="https://…"></label><button class="btn block" type="submit">Save rating</button></form>' +
       '<form class="card" data-form="password"><h3>Account</h3><p class="sub" style="margin-bottom:10px">Signed in as <b>' + esc(S.user && S.user.email) + '</b></p><label class="f"><span>New password (min 8 characters)</span><input type="password" name="pw" autocomplete="new-password" minlength="8"></label><button class="btn block" type="submit">Change password</button></form>' +
       '<div class="card"><h3>Order alerts</h3><label class="sw"><input type="checkbox" data-sound' + (localStorage.getItem('genius-mute') === '1' ? '' : ' checked') + '><s></s>Beep when a new order arrives (this device)</label><button class="btn ghost sm" data-testsound style="margin-top:8px">Test sound</button></div>' +
+      teamCard() +
       '<div class="card"><h3>Backup</h3><p class="sub" style="margin-bottom:10px">Download a copy of your whole menu and settings as a file. Keep it somewhere safe.</p><button class="btn ghost block" data-backup>↓ Download backup</button></div>' +
       '<button class="btn danger block" data-signout>Sign out</button>';
+  }
+  function teamCard() {
+    const me = (S.user && S.user.email || '').toLowerCase();
+    return '<div class="card wide"><h3>Team</h3><p class="sub" style="margin-bottom:10px"><b>Owner</b>: full access. <b>Staff</b>: orders and sold-out switches only. A new staff member opens the admin page, taps “Create account” with the email you add here, and signs in.</p>' +
+      (S.team.length ? S.team.map(m => '<div class="tm" data-email="' + esc(m.email) + '"><div class="grow"><b>' + esc(m.email) + '</b>' + (m.email.toLowerCase() === me ? ' <small class="sub">(you)</small>' : '') + '</div>' +
+        (m.email.toLowerCase() === me ? '<span class="tag">' + m.role + '</span>' : '<select data-teamrole aria-label="Role"><option value="staff"' + (m.role === 'staff' ? ' selected' : '') + '>Staff</option><option value="owner"' + (m.role === 'owner' ? ' selected' : '') + '>Owner</option></select><button class="iconb del" data-teamdel aria-label="Remove">' + ICON.trash + '</button>') + '</div>').join('') : '<p class="sub">No team data. Run supabase/002_staff_and_phone.sql first.</p>') +
+      '<form data-form="teamadd" class="tm-add"><label class="f grow"><span>Add by email</span><input type="email" name="email" required placeholder="barista@example.com" inputmode="email"></label><label class="f"><span>Role</span><select name="role"><option value="staff">Staff</option><option value="owner">Owner</option></select></label><button class="btn" type="submit">Add</button></form></div>';
   }
   function downloadBackup() {
     const data = { app: 'genius-admin', saved: new Date().toISOString(), menu_groups: S.groups, menu_items: S.items, settings: S.settings };
@@ -380,6 +419,10 @@
         else if (!(count >= 0)) { toast('Enter the number of reviews', true); }
         else if (u && !/^https:\/\//i.test(u)) { toast('The link must start with https://', true); }
         else if (await saveSetting('rating', { score, count, url: u })) toast('Rating saved ✓');
+      } else if (n === 'teamadd') {
+        const em = String(d.get('email') || '').trim().toLowerCase(), role = d.get('role') === 'owner' ? 'owner' : 'staff';
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) toast('Enter a valid email', true);
+        else { const r = await db.from('admins').upsert({ email: em, role }); if (r.error) toast('Could not add: ' + r.error.message, true); else { await loadTeam(); renderPage(); toast(em + ' added as ' + role); } }
       } else if (n === 'password') {
         const pw = String(d.get('pw') || ''); if (pw.length < 8) { toast('Use at least 8 characters', true); }
         else { const r = await db.auth.updateUser({ password: pw }); toast(r.error ? r.error.message : 'Password changed ✓', !!r.error); if (!r.error) f.reset(); }
@@ -391,6 +434,10 @@
   const $ = (el, sel) => el.closest(sel);
   document.addEventListener('click', async e => {
     const t = e.target, b = t.closest('button'); if (!b || !S.user) return;
+    if ('teamdel' in b.dataset) {
+      const em = $(b, '[data-email]').dataset.email; if (!confirm('Remove ' + em + '? They will no longer be able to use the admin.')) return;
+      const r = await db.from('admins').delete().eq('email', em); if (r.error) toast(r.error.message, true); else { await loadTeam(); renderPage(); toast('Removed'); } return;
+    }
     if (b.dataset.go) { S.tab = b.dataset.go; renderPage(); window.scrollTo(0, 0); return; }
     if ('csv' in b.dataset) { exportCsv(); return; }
     if ('backup' in b.dataset) { downloadBackup(); return; }
@@ -445,6 +492,10 @@
     const t = e.target; if (!S.user) return;
     const gc = $(t, '[data-gid]'), g = gc && S.groups.find(x => x.id === gc.dataset.gid);
     const ic = $(t, '[data-iid]'), it = ic && S.items.find(x => x.id === ic.dataset.iid);
+    if (t.matches('[data-teamrole]')) {
+      const em = $(t, '[data-email]').dataset.email; if (t.value === 'owner' && !confirm('Give ' + em + ' full owner access (menu, prices, photos, team)?')) { await loadTeam(); renderPage(); return; }
+      const r = await db.from('admins').update({ role: t.value }).eq('email', em); toast(r.error ? r.error.message : 'Role updated', !!r.error); await loadTeam(); renderPage(); return;
+    }
     if (t.matches('[data-sound]')) { if (t.checked) localStorage.removeItem('genius-mute'); else localStorage.setItem('genius-mute', '1'); toast(t.checked ? 'Sound on' : 'Sound off'); return; }
     if (t.matches('[data-pfile]')) { const c = $(t, '[data-slot]'), f = t.files[0]; if (c && f) uploadPhoto(c.dataset.slot, f); t.value = ''; return; }
     if (g && t.matches('[data-gtitle]')) {
@@ -465,7 +516,7 @@
       if (v === undefined) { t.value = pv(it[f]); toast('Enter a price like 1.5', true); return; }
       it[f] = v; t.value = pv(v); await mut(db.from('menu_items').update({ [f]: v }).eq('id', it.id), 'Saved ✓'); return;
     }
-    if (it && t.matches('[data-isold]')) { it.sold_out = t.checked; await mut(db.from('menu_items').update({ sold_out: it.sold_out }).eq('id', it.id), it.sold_out ? 'Marked sold out' : 'Back on the menu'); return; }
+    if (it && t.matches('[data-isold]')) { it.sold_out = t.checked; await mut(isOwner() ? db.from('menu_items').update({ sold_out: it.sold_out }).eq('id', it.id) : db.rpc('set_sold_out', { p_id: it.id, p_val: it.sold_out }), it.sold_out ? 'Marked sold out' : 'Back on the menu'); return; }
     if (it && t.matches('[data-ihide]')) { it.hidden = t.checked; ic.classList.toggle('hid', it.hidden); await mut(db.from('menu_items').update({ hidden: it.hidden }).eq('id', it.id), it.hidden ? 'Hidden from website' : 'Visible again'); return; }
   });
 
