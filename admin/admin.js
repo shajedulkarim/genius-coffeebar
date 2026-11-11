@@ -17,6 +17,7 @@
     menu: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
     photos: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-5-8 8"/></svg>',
     settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.5-2.3.9a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.5a7 7 0 00-2 1.2l-2.3-.9-2 3.5 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.5 2.3-.9a7 7 0 002 1.2l.4 2.5h4l.4-2.5a7 7 0 002-1.2l2.3.9 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>',
+    insights: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>',
     up: '<svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
     down: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
     trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'
@@ -39,7 +40,7 @@
   }
 
   const db = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-  const S = { user: null, tab: 'orders', menuTab: 'coffee', groups: [], items: [], settings: {}, orders: [], ordersFilter: 'active', busy: {}, maxSeen: 0, polling: null, recovery: false };
+  const S = { user: null, tab: 'orders', menuTab: 'coffee', groups: [], items: [], settings: {}, orders: [], ordersFilter: 'active', osearch: '', msearch: '', range: 7, busy: {}, maxSeen: 0, polling: null, recovery: false };
 
   // ---------- data ----------
   async function loadMenu() {
@@ -48,7 +49,7 @@
     S.groups = g.data; S.items = i.data; S.settings = {}; s.data.forEach(x => S.settings[x.key] = x.value);
   }
   async function loadOrders(quiet) {
-    const r = await db.from('orders').select('*').order('created_at', { ascending: false }).limit(150);
+    const r = await db.from('orders').select('*').order('created_at', { ascending: false }).limit(500);
     if (r.error) { if (!quiet) toast('Could not load orders', true); return; }
     const fresh = r.data.filter(o => o.id > S.maxSeen && o.status === 'new');
     if (S.maxSeen && fresh.length) { notify(fresh.length); }
@@ -59,6 +60,7 @@
   function notify(n) {
     toast('🔔 ' + n + ' new order' + (n > 1 ? 's' : ''));
     try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
+    if (localStorage.getItem('genius-mute') === '1') return;
     try {
       const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain();
       o.connect(g); g.connect(a.destination); o.type = 'sine'; o.frequency.value = 880; g.gain.setValueAtTime(.2, a.currentTime);
@@ -126,30 +128,61 @@
   function renderNav() {
     const n = document.getElementById('nav'); if (!n) return;
     const nc = newCount();
-    n.innerHTML = [['orders', 'Orders'], ['menu', 'Menu'], ['photos', 'Photos'], ['settings', 'Settings']].map(([k, l]) =>
+    n.innerHTML = [['orders', 'Orders'], ['menu', 'Menu'], ['insights', 'Insights'], ['photos', 'Photos'], ['settings', 'Settings']].map(([k, l]) =>
       '<button data-go="' + k + '" class="' + (S.tab === k ? 'on' : '') + '" aria-label="' + l + '">' + ICON[k] + l + (k === 'orders' && nc ? '<span class="badge">' + nc + '</span>' : '') + '</button>').join('') + '<a class="site" href="../" target="_blank" rel="noopener">View website ↗</a>';
     document.title = (nc ? '(' + nc + ') ' : '') + 'Genius Admin';
   }
   function renderPage() {
     const p = document.getElementById('page'); if (!p) return;
     const y = window.scrollY;
-    p.innerHTML = ({ orders: pageOrders, menu: pageMenu, photos: pagePhotos, settings: pageSettings })[S.tab]();
+    p.innerHTML = ({ orders: pageOrders, menu: pageMenu, insights: pageInsights, photos: pagePhotos, settings: pageSettings })[S.tab]();
     renderNav(); window.scrollTo(0, y);
   }
 
   // ---------- ORDERS ----------
   const muscat = (d, o) => new Date(d).toLocaleString('en-GB', Object.assign({ timeZone: 'Asia/Muscat' }, o));
   const ago = d => { const m = Math.round((Date.now() - new Date(d)) / 6e4); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.floor(m / 60) + ' h ago' : muscat(d, { day: 'numeric', month: 'short' }); };
+  const dayKey = d => muscat(d, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  function filteredOrders() {
+    const today = dayKey(Date.now()), q = S.osearch.trim().toLowerCase();
+    let list = S.orders;
+    if (S.ordersFilter === 'active') list = list.filter(o => ['new', 'preparing', 'ready'].includes(o.status));
+    else if (S.ordersFilter === 'today') list = list.filter(o => dayKey(o.created_at) === today);
+    else if (S.ordersFilter === 'done') list = list.filter(o => o.status === 'done');
+    if (q) list = list.filter(o => ('#' + o.id + ' ' + (o.name || '') + ' ' + (o.note || '') + ' ' + (o.items || []).map(i => i.n).join(' ')).toLowerCase().includes(q));
+    return list;
+  }
+  function ordersList() {
+    const list = filteredOrders();
+    return list.length ? list.map(orderCard).join('') : '<div class="empty">' + (S.osearch ? 'No orders match your search.' : S.ordersFilter === 'active' ? 'No active orders.<br>New orders from the website appear here.' : 'Nothing here.') + '</div>';
+  }
   function pageOrders() {
-    const today = muscat(Date.now(), { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const td = S.orders.filter(o => muscat(o.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' }) === today && o.status !== 'cancelled');
+    const today = dayKey(Date.now());
+    const td = S.orders.filter(o => dayKey(o.created_at) === today && o.status !== 'cancelled');
     const sum = td.reduce((s, o) => s + Number(o.total), 0);
     const act = S.orders.filter(o => ['new', 'preparing', 'ready'].includes(o.status));
-    const list = S.ordersFilter === 'active' ? act : S.ordersFilter === 'done' ? S.orders.filter(o => o.status === 'done') : S.orders;
-    return '<h2 class="h2">Orders</h2><div class="stats"><div class="stat"><b>' + td.length + '</b><span>Orders today</span></div><div class="stat"><b>' + omr(sum) + '</b><span>Today\'s total</span></div></div>' +
-      '<div class="chips">' + [['active', 'Active', act.length], ['done', 'Done'], ['all', 'All']].map(([k, l, c]) => '<button class="chip ' + (S.ordersFilter === k ? 'on' : '') + '" data-ofilter="' + k + '">' + l + (c ? '<i>' + c + '</i>' : '') + '</button>').join('') + '<button class="chip" data-refresh>↻ Refresh</button></div>' +
-      (list.length ? list.map(orderCard).join('') : '<div class="empty">' + (S.ordersFilter === 'active' ? 'No active orders.<br>New orders from the website appear here.' : 'Nothing here.') + '</div>') +
-      '<p class="sub" style="text-align:center">Orders also arrive on WhatsApp. Here you can track their status.</p>';
+    return '<h2 class="h2">Orders</h2><div class="stats"><div class="stat"><b>' + td.length + '</b><span>Orders today</span></div><div class="stat"><b>' + omr(sum) + '</b><span>Today\'s total</span></div>' +
+      '<div class="stat"><b>' + act.length + '</b><span>Active now</span></div><div class="stat"><b>' + (td.length ? omr(sum / td.length) : '—') + '</b><span>Average order</span></div></div>' +
+      '<div class="chips">' + [['active', 'Active', act.length], ['today', 'Today'], ['done', 'Done'], ['all', 'All']].map(([k, l, c]) => '<button class="chip ' + (S.ordersFilter === k ? 'on' : '') + '" data-ofilter="' + k + '">' + l + (c ? '<i>' + c + '</i>' : '') + '</button>').join('') + '<button class="chip" data-refresh>↻ Refresh</button><button class="chip" data-csv>↓ Export CSV</button></div>' +
+      '<div class="search"><input type="search" placeholder="Search name, item, note or #id" value="' + esc(S.osearch) + '" data-osearch aria-label="Search orders"></div>' +
+      '<div class="dc" id="olist">' + ordersList() + '</div>' +
+      '<p class="sub" style="text-align:center">Orders also arrive on WhatsApp. Here you can track their status. Last ' + S.orders.length + ' orders loaded.</p>';
+  }
+  function exportCsv() {
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const rows = [['Order', 'Date', 'Time', 'Name', 'Pickup', 'Status', 'Items', 'Total OMR', 'Note']].concat(filteredOrders().map(o => [
+      o.id, muscat(o.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' }), muscat(o.created_at, { hour: '2-digit', minute: '2-digit' }), o.name, o.pickup, o.status,
+      (o.items || []).map(i => i.q + 'x ' + i.n + (i.v ? ' (' + i.v + ')' : '')).join('; '), Number(o.total).toFixed(3), o.note]));
+    const blob = new Blob(['﻿' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'genius-orders-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('CSV downloaded');
+  }
+  function printOrder(o) {
+    const w = window.open('', '_blank', 'width=380,height=640'); if (!w) { toast('Allow pop-ups to print', true); return; }
+    w.document.write('<!doctype html><title>Order #' + o.id + '</title><style>body{font:14px/1.4 monospace;width:280px;margin:12px auto}h1{font-size:18px;text-align:center;margin:0}hr{border:0;border-top:1px dashed #000}.r{display:flex;justify-content:space-between;gap:8px}</style>' +
+      '<h1>GENIUS COFFEE BAR</h1><p style="text-align:center;margin:2px 0 8px">Order #' + o.id + '</p><hr><b>' + esc(o.name || 'Guest') + '</b><br>' + muscat(o.created_at, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + '<br>Pickup: ' + esc(o.pickup || '-') + '<hr>' +
+      (o.items || []).map(i => '<div class="r"><span>' + i.q + 'x ' + esc(i.n) + (i.v ? ' (' + esc(i.v) + ')' : '') + '</span><span>' + omr(i.p * i.q) + '</span></div>').join('') + '<hr><div class="r"><b>TOTAL</b><b>' + omr(o.total) + '</b></div>' + (o.note ? '<hr>Note: ' + esc(o.note) : '') + '<script>onload=function(){print()}<\/script>');
+    w.document.close();
   }
   function orderCard(o) {
     const nx = STATUS_NEXT[o.status];
@@ -157,13 +190,38 @@
       '<ul>' + (o.items || []).map(i => '<li><span>' + i.q + '× ' + esc(i.n) + (i.v ? ' <small class="sub">(' + esc(i.v) + ')</small>' : '') + '</span><span>' + omr(i.p * i.q) + '</span></li>').join('') + '</ul>' +
       '<div class="tot"><span>Total</span><span>' + omr(o.total) + '</span></div>' + (o.note ? '<div class="note">📝 ' + esc(o.note) + '</div>' : '') +
       ((nx || o.status === 'new' || o.status === 'preparing' || o.status === 'ready') ? '<div class="acts">' + (nx ? '<button class="btn grow" data-ostatus="' + nx[0] + '">' + nx[1] + '</button>' : '') +
-        (['new', 'preparing', 'ready'].includes(o.status) ? '<button class="btn danger" data-ostatus="cancelled">Cancel</button>' : '') + '</div>' : '') + '</article>';
+        (['new', 'preparing', 'ready'].includes(o.status) ? '<button class="btn danger" data-ostatus="cancelled">Cancel</button>' : '') + '</div>' : '') + '<div class="acts"><button class="btn ghost sm" data-oprint>🖨 Print</button></div>' + '</article>';
   }
   async function setOrder(id, status) {
     const o = S.orders.find(x => x.id === id); if (!o) return;
     const old = o.status; o.status = status; renderPage();
     const r = await db.from('orders').update({ status }).eq('id', id);
     if (r.error) { o.status = old; renderPage(); toast('Could not update: ' + r.error.message, true); }
+  }
+
+
+  // ---------- INSIGHTS ----------
+  function pageInsights() {
+    const days = S.range, now = Date.now();
+    const ok = S.orders.filter(o => o.status !== 'cancelled' && now - new Date(o.created_at) < days * 864e5);
+    const rev = ok.reduce((a, o) => a + Number(o.total), 0);
+    const byDay = {}; ok.forEach(o => { const k = dayKey(o.created_at); (byDay[k] = byDay[k] || { n: 0, t: 0 }); byDay[k].n++; byDay[k].t += Number(o.total); });
+    const cols = []; for (let i = days - 1; i >= 0; i--) { const d = new Date(now - i * 864e5), k = dayKey(d), v = byDay[k] || { n: 0, t: 0 }; cols.push({ k, v, lbl: muscat(d, { day: 'numeric' }), full: muscat(d, { day: 'numeric', month: 'short' }) }); }
+    const mx = Math.max(1, ...cols.map(c => c.v.t));
+    const best = cols.reduce((a, c) => c.v.t > a.v.t ? c : a, cols[0]);
+    const items = {}; ok.forEach(o => (o.items || []).forEach(i => { const k = i.n + (i.v ? ' · ' + i.v : ''); (items[k] = items[k] || { q: 0, t: 0 }); items[k].q += i.q; items[k].t += i.p * i.q; }));
+    const top = Object.entries(items).sort((a, b) => b[1].q - a[1].q).slice(0, 8), tq = top.length ? top[0][1].q : 1;
+    const hrs = Array(24).fill(0); ok.forEach(o => { hrs[+muscat(o.created_at, { hour: '2-digit', hour12: false }) % 24]++; });
+    const hm = Math.max(1, ...hrs), peak = hrs.indexOf(Math.max(...hrs));
+    const canc = S.orders.filter(o => o.status === 'cancelled' && now - new Date(o.created_at) < days * 864e5).length;
+    return '<h2 class="h2">Insights</h2><div class="chips">' + [[7, 'Last 7 days'], [14, 'Last 14 days'], [30, 'Last 30 days']].map(([k, l]) => '<button class="chip ' + (S.range === k ? 'on' : '') + '" data-range="' + k + '">' + l + '</button>').join('') + '</div>' +
+      '<div class="stats four"><div class="stat"><b>' + omr(rev) + '</b><span>Sales</span></div><div class="stat"><b>' + ok.length + '</b><span>Orders</span></div><div class="stat"><b>' + (ok.length ? omr(rev / ok.length) : '—') + '</b><span>Average order</span></div><div class="stat"><b>' + canc + '</b><span>Cancelled</span></div></div>' +
+      (ok.length ? '' : '<div class="empty">No orders in this period yet. Orders placed on the website appear here.</div>') +
+      '<div class="card wide"><h3>Sales per day</h3><div class="bars">' + cols.map(c => '<div class="bar" title="' + c.full + ': ' + omr(c.v.t) + ' · ' + c.v.n + ' orders"><i style="height:' + Math.max(c.v.t ? 4 : 0, c.v.t / mx * 100) + '%"></i><span>' + (days <= 14 || +c.lbl % 5 === 0 || +c.lbl === 1 ? c.lbl : '') + '</span></div>').join('') + '</div>' +
+      (best && best.v.t ? '<p class="sub" style="margin-top:8px">Best day: <b>' + best.full + '</b> · ' + omr(best.v.t) + ' · ' + best.v.n + ' orders</p>' : '') + '</div>' +
+      '<div class="card"><h3>Top sellers</h3>' + (top.length ? top.map(([n, v]) => '<div class="hb"><div class="hb-l"><span>' + esc(n) + '</span><b>' + v.q + '×</b></div><div class="hb-t"><i style="width:' + (v.q / tq * 100) + '%"></i></div></div>').join('') : '<p class="sub">Nothing yet.</p>') + '</div>' +
+      '<div class="card"><h3>Busy hours</h3><div class="bars sm">' + hrs.map((c, h) => '<div class="bar" title="' + hr(h) + ': ' + c + ' orders"><i style="height:' + Math.max(c ? 6 : 0, c / hm * 100) + '%"></i><span>' + (h % 3 === 0 ? (h % 12 || 12) : '') + '</span></div>').join('') + '</div>' +
+      (ok.length ? '<p class="sub" style="margin-top:8px">Busiest around <b>' + hr(peak) + '</b>. Times are Muscat time.</p>' : '') + '</div>';
   }
 
   // ---------- MENU ----------
@@ -176,15 +234,27 @@
     if (!S.groups.length) {
       return '<h2 class="h2">Menu</h2><div class="card"><h3>Menu is empty</h3><p class="sub" style="margin-bottom:14px">One tap copies the current website menu into the database. After that you can edit everything here.</p><button class="btn block" data-import>Import current menu</button></div>';
     }
-    return '<h2 class="h2">Menu</h2>' + chips + (gs.length ? gs.map(groupCard).join('') : '<div class="empty">No sections in this tab yet.</div>') +
-      '<button class="btn block" data-addgroup>＋ Add section</button><p class="sub" style="text-align:center;margin-top:14px">Changes save automatically and show on the website within seconds.</p>';
+    const sold = S.items.filter(i => i.sold_out).length, hid = S.items.filter(i => i.hidden).length;
+    return '<h2 class="h2">Menu</h2><div class="search"><input type="search" placeholder="Search all items…" value="' + esc(S.msearch) + '" data-msearch aria-label="Search menu"></div>' +
+      (sold || hid ? '<p class="sub" style="margin:-4px 0 10px">' + (sold ? '<b>' + sold + '</b> sold out' : '') + (sold && hid ? ' · ' : '') + (hid ? '<b>' + hid + '</b> hidden' : '') + '</p>' : '') +
+      '<div class="dc" id="mlist">' + menuList() + '</div>' +
+      (S.msearch.trim() ? '' : '<button class="btn block" data-addgroup>＋ Add section</button>') + '<p class="sub" style="text-align:center;margin-top:14px">Changes save automatically and show on the website within seconds.</p>';
   }
-  function groupCard(g) {
+  function menuList() {
+    const q = S.msearch.trim().toLowerCase();
+    if (!q) {
+      const chips = '<div class="chips">' + TABS.map(([k, l]) => '<button class="chip ' + (S.menuTab === k ? 'on' : '') + '" data-mtab="' + k + '">' + l + '<i>' + S.groups.filter(g => g.tab === k).length + '</i></button>').join('') + '</div>';
+      const gs = gOf(S.menuTab); return chips + (gs.length ? gs.map(g => groupCard(g)).join('') : '<div class="empty">No sections in this tab yet.</div>');
+    }
+    const out = TABS.flatMap(([k]) => gOf(k)).filter(g => iOf(g.id).some(i => i.name.toLowerCase().includes(q))).map(g => groupCard(g, q));
+    return out.length ? out.join('') : '<div class="empty">No items match “' + esc(S.msearch) + '”.</div>';
+  }
+  function groupCard(g, q) {
     const its = iOf(g.id), gs = gOf(g.tab), idx = gs.indexOf(g);
     return '<section class="card grp" data-gid="' + g.id + '"><div class="grp-h"><input type="text" value="' + esc(g.title) + '" data-gtitle aria-label="Section name" maxlength="60">' +
       '<button class="iconb" data-gmove="-1" aria-label="Move section up"' + (idx === 0 ? ' disabled' : '') + '>' + ICON.up + '</button><button class="iconb" data-gmove="1" aria-label="Move section down"' + (idx === gs.length - 1 ? ' disabled' : '') + '>' + ICON.down + '</button></div>' +
-      '<div class="grp-o"><label class="sw"><input type="checkbox" data-gdual' + (g.dual ? ' checked' : '') + '><s></s>Hot &amp; Iced prices</label><button class="iconb del" data-gdel aria-label="Delete section">' + ICON.trash + '</button></div>' +
-      its.map((it, n) => itemRow(g, it, n, its.length)).join('') +
+      '<div class="grp-o"><label class="sw"><input type="checkbox" data-gdual' + (g.dual ? ' checked' : '') + '><s></s>Hot &amp; Iced prices</label><span class="sp"></span><button class="btn ghost sm" data-gsold="' + (its.every(x => x.sold_out) ? 0 : 1) + '">' + (its.length && its.every(x => x.sold_out) ? 'All back in stock' : 'All sold out') + '</button><button class="iconb del" data-gdel aria-label="Delete section">' + ICON.trash + '</button></div>' +
+      its.map((it, n) => q && !it.name.toLowerCase().includes(q) ? '' : itemRow(g, it, n, its.length)).join('') +
       '<div class="addrow"><button class="btn sm" data-additem>＋ Add item</button></div></section>';
   }
   function itemRow(g, it, n, len) {
@@ -192,7 +262,7 @@
       '<button class="iconb" data-imove="-1" aria-label="Move up"' + (n === 0 ? ' disabled' : '') + '>' + ICON.up + '</button><button class="iconb" data-imove="1" aria-label="Move down"' + (n === len - 1 ? ' disabled' : '') + '>' + ICON.down + '</button></div>' +
       '<div class="it-2"><label class="pr"><span>' + (g.dual ? 'Hot OMR' : 'Price OMR') + '</span><input type="text" inputmode="decimal" value="' + pv(it.hot) + '" data-iprice="hot" placeholder="' + (g.dual ? '—' : '0.0') + '"></label>' +
       (g.dual ? '<label class="pr"><span>Iced OMR</span><input type="text" inputmode="decimal" value="' + pv(it.iced) + '" data-iprice="iced" placeholder="—"></label>' : '') +
-      '<span class="sp"></span><div class="it-tools"><label class="sw warn"><input type="checkbox" data-isold' + (it.sold_out ? ' checked' : '') + '><s></s>Sold out</label><label class="sw"><input type="checkbox" data-ihide' + (it.hidden ? ' checked' : '') + '><s></s>Hide</label><button class="iconb del" data-idel aria-label="Delete item">' + ICON.trash + '</button></div></div></div>';
+      '<span class="sp"></span><div class="it-tools"><label class="sw warn"><input type="checkbox" data-isold' + (it.sold_out ? ' checked' : '') + '><s></s>Sold out</label><label class="sw"><input type="checkbox" data-ihide' + (it.hidden ? ' checked' : '') + '><s></s>Hide</label><button class="iconb" data-idup aria-label="Duplicate item" title="Duplicate">⧉</button><button class="iconb del" data-idel aria-label="Delete item">' + ICON.trash + '</button></div></div></div>';
   }
   async function mut(p, okMsg) {
     const r = await p;
@@ -288,7 +358,14 @@
       '<form class="card" data-form="rating"><h3>Google rating</h3><div class="row"><label class="f grow"><span>Stars (e.g. 4.9)</span><input type="text" name="score" inputmode="decimal" value="' + esc(r.score) + '" maxlength="4"></label><label class="f grow"><span>Number of reviews</span><input type="number" name="count" min="0" max="99999" value="' + esc(r.count) + '"></label></div>' +
       '<label class="f"><span>Link to your Google reviews</span><input type="text" name="url" value="' + esc(r.url) + '" placeholder="https://…"></label><button class="btn block" type="submit">Save rating</button></form>' +
       '<form class="card" data-form="password"><h3>Account</h3><p class="sub" style="margin-bottom:10px">Signed in as <b>' + esc(S.user && S.user.email) + '</b></p><label class="f"><span>New password (min 8 characters)</span><input type="password" name="pw" autocomplete="new-password" minlength="8"></label><button class="btn block" type="submit">Change password</button></form>' +
+      '<div class="card"><h3>Order alerts</h3><label class="sw"><input type="checkbox" data-sound' + (localStorage.getItem('genius-mute') === '1' ? '' : ' checked') + '><s></s>Beep when a new order arrives (this device)</label><button class="btn ghost sm" data-testsound style="margin-top:8px">Test sound</button></div>' +
+      '<div class="card"><h3>Backup</h3><p class="sub" style="margin-bottom:10px">Download a copy of your whole menu and settings as a file. Keep it somewhere safe.</p><button class="btn ghost block" data-backup>↓ Download backup</button></div>' +
       '<button class="btn danger block" data-signout>Sign out</button>';
+  }
+  function downloadBackup() {
+    const data = { app: 'genius-admin', saved: new Date().toISOString(), menu_groups: S.groups, menu_items: S.items, settings: S.settings };
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); a.download = 'genius-backup-' + data.saved.slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('Backup downloaded');
   }
   async function submitForm(f) {
     const n = f.dataset.form, d = new FormData(f), btn = f.querySelector('[type=submit]'); btn.disabled = true;
@@ -315,6 +392,11 @@
   document.addEventListener('click', async e => {
     const t = e.target, b = t.closest('button'); if (!b || !S.user) return;
     if (b.dataset.go) { S.tab = b.dataset.go; renderPage(); window.scrollTo(0, 0); return; }
+    if ('csv' in b.dataset) { exportCsv(); return; }
+    if ('backup' in b.dataset) { downloadBackup(); return; }
+    if ('testsound' in b.dataset) { const m = localStorage.getItem('genius-mute'); localStorage.removeItem('genius-mute'); notify(1); if (m) localStorage.setItem('genius-mute', m); return; }
+    if (b.dataset.range) { S.range = +b.dataset.range; renderPage(); return; }
+    if ('oprint' in b.dataset) { const c = $(b, '[data-oid]'), o = c && S.orders.find(x => x.id === +c.dataset.oid); if (o) printOrder(o); return; }
     if (b.dataset.ofilter) { S.ordersFilter = b.dataset.ofilter; renderPage(); return; }
     if ('refresh' in b.dataset) { await loadOrders(); toast('Updated'); return; }
     if (b.dataset.ostatus) { const c = $(b, '[data-oid]'); if (b.dataset.ostatus === 'cancelled' && !confirm('Cancel this order?')) return; setOrder(+c.dataset.oid, b.dataset.ostatus); return; }
@@ -328,6 +410,10 @@
     }
     const gc = $(b, '[data-gid]'), g = gc && S.groups.find(x => x.id === gc.dataset.gid);
     if (g && b.dataset.gmove) { const list = gOf(g.tab); swapSort(list, list.indexOf(g), +b.dataset.gmove, 'menu_groups'); return; }
+    if (g && b.dataset.gsold !== undefined) {
+      const v = b.dataset.gsold === '1', its = iOf(g.id); its.forEach(x => x.sold_out = v); renderPage();
+      await mut(db.from('menu_items').update({ sold_out: v }).eq('group_id', g.id), v ? 'Section marked sold out' : 'Section back in stock'); return;
+    }
     if (g && 'gdel' in b.dataset) {
       if (!confirm('Delete the section “' + g.title + '” and all its items? This cannot be undone.')) return;
       if (await mut(db.from('menu_groups').delete().eq('id', g.id), 'Section deleted')) { S.groups = S.groups.filter(x => x.id !== g.id); S.items = S.items.filter(i => i.group_id !== g.id); renderPage(); }
@@ -342,6 +428,11 @@
     }
     const ic = $(b, '[data-iid]'), it = ic && S.items.find(x => x.id === ic.dataset.iid);
     if (it && b.dataset.imove) { const list = iOf(it.group_id); swapSort(list, list.indexOf(it), +b.dataset.imove, 'menu_items'); return; }
+    if (it && 'idup' in b.dataset) {
+      const list = iOf(it.group_id), r = await db.from('menu_items').insert({ group_id: it.group_id, name: it.name + ' copy', hot: it.hot, iced: it.iced, sort: Math.max(...list.map(x => x.sort)) + 1 }).select().single();
+      if (r.error) { toast('Could not duplicate: ' + r.error.message, true); return; }
+      S.items.push(r.data); renderPage(); toast('Duplicated — rename it'); return;
+    }
     if (it && 'idel' in b.dataset) {
       if (!confirm('Delete “' + it.name + '”?')) return;
       if (await mut(db.from('menu_items').delete().eq('id', it.id), 'Item deleted')) { S.items = S.items.filter(x => x.id !== it.id); renderPage(); }
@@ -354,6 +445,7 @@
     const t = e.target; if (!S.user) return;
     const gc = $(t, '[data-gid]'), g = gc && S.groups.find(x => x.id === gc.dataset.gid);
     const ic = $(t, '[data-iid]'), it = ic && S.items.find(x => x.id === ic.dataset.iid);
+    if (t.matches('[data-sound]')) { if (t.checked) localStorage.removeItem('genius-mute'); else localStorage.setItem('genius-mute', '1'); toast(t.checked ? 'Sound on' : 'Sound off'); return; }
     if (t.matches('[data-pfile]')) { const c = $(t, '[data-slot]'), f = t.files[0]; if (c && f) uploadPhoto(c.dataset.slot, f); t.value = ''; return; }
     if (g && t.matches('[data-gtitle]')) {
       const v = t.value.trim(); if (!v) { t.value = g.title; toast('Name cannot be empty', true); return; }
@@ -377,6 +469,11 @@
     if (it && t.matches('[data-ihide]')) { it.hidden = t.checked; ic.classList.toggle('hid', it.hidden); await mut(db.from('menu_items').update({ hidden: it.hidden }).eq('id', it.id), it.hidden ? 'Hidden from website' : 'Visible again'); return; }
   });
 
+  document.addEventListener('input', e => {
+    const t = e.target;
+    if (t.matches('[data-osearch]')) { S.osearch = t.value; const l = document.getElementById('olist'); if (l) l.innerHTML = ordersList(); }
+    else if (t.matches('[data-msearch]')) { S.msearch = t.value; const l = document.getElementById('mlist'); if (l) l.innerHTML = menuList(); }
+  });
   document.addEventListener('submit', e => { const f = e.target.closest('[data-form]'); if (f) { e.preventDefault(); submitForm(f); } });
 
   start().catch(err => { show(); $app.innerHTML = '<div class="login"><div class="card"><h3>Something went wrong</h3><p class="err">' + esc(err.message || err) + '</p></div></div>'; });
